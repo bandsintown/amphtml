@@ -1,22 +1,7 @@
-/**
- * Copyright 2021 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 const ava = require('ava');
 const path = require('path');
 const tempy = require('tempy');
-const {readFile, writeJson, readJson, writeFile, mkdirp} = require('fs-extra');
+const {mkdirp, readFile, readJson, writeFile, writeJson} = require('fs-extra');
 
 const stubbedCalls = {};
 
@@ -36,10 +21,12 @@ const test = (name, cb) =>
   ava(name, (t) =>
     // Disable logging since it clutters the test output.
     stubModule('../../../common/logging', 'log', () =>
-      // Disable prettier formatting since it's slow.
-      stubModule('../format', 'format', () =>
-        // Run test
-        cb(t)
+      stubModule('../../../common/logging', 'logLocalDev', () =>
+        // Disable prettier formatting since it's slow.
+        stubModule('../format', 'format', () =>
+          // Run test
+          cb(t)
+        )
       )
     )
   );
@@ -121,7 +108,7 @@ test('makeExtensionFromTemplates does not print unit test blurb if a test file i
       {name: 'my-extension-name'}
     );
     t.false(
-      !!stubbedCalls.log.find((args) =>
+      !!stubbedCalls.logLocalDev.find((args) =>
         args.find((arg) => arg.includes('amp unit --files'))
       )
     );
@@ -136,7 +123,7 @@ test('makeExtensionFromTemplates prints unit test blurb if a test file is create
       {name: 'my-extension-name'}
     );
     t.true(
-      !!stubbedCalls.log.find((args) =>
+      !!stubbedCalls.logLocalDev.find((args) =>
         args.find((arg) => arg.includes('amp unit --files'))
       )
     );
@@ -151,7 +138,7 @@ test('makeExtensionFromTemplates does not print Storybook blurb if a Storybook f
       {name: 'my-extension-name'}
     );
     t.false(
-      !!stubbedCalls.log.find((args) =>
+      !!stubbedCalls.logLocalDev.find((args) =>
         args.find((arg) => arg.includes('amp storybook'))
       )
     );
@@ -166,7 +153,7 @@ test('makeExtensionFromTemplates prints Storybook blurb if a Storybook file is c
       {name: 'my-extension-name'}
     );
     t.true(
-      !!stubbedCalls.log.find((args) =>
+      !!stubbedCalls.logLocalDev.find((args) =>
         args.find((arg) => arg.includes('amp storybook'))
       )
     );
@@ -181,7 +168,7 @@ test('makeExtensionFromTemplates does not print validator blurb if a validator-*
       {name: 'my-extension-name'}
     );
     t.false(
-      !!stubbedCalls.log.find((args) =>
+      !!stubbedCalls.logLocalDev.find((args) =>
         args.find((arg) => arg.includes('amp validator --update_tests'))
       )
     );
@@ -191,12 +178,12 @@ test('makeExtensionFromTemplates prints validator blurb if a validator-*.html fi
   tempy.directory.task(async (dir) => {
     const {makeExtensionFromTemplates} = require('..');
     await makeExtensionFromTemplates(
-      [path.join(__dirname, '../template/classic')],
+      [path.join(__dirname, '../template/shared')],
       dir,
       {name: 'my-extension-name'}
     );
     t.true(
-      !!stubbedCalls.log.find((args) =>
+      !!stubbedCalls.logLocalDev.find((args) =>
         args.find((arg) => arg.includes('amp validator --update_tests'))
       )
     );
@@ -217,14 +204,15 @@ test('insertExtensionBundlesConfig inserts new entry', (t) =>
 
       await insertExtensionBundlesConfig(
         {
-          name: 'a',
           version: 'x',
+          name: 'a',
           options: {hasCss: true},
         },
         destination
       );
 
-      t.deepEqual(await readJson(destination), [
+      const items = await readJson(destination);
+      t.deepEqual(items, [
         // inserted in lexicographical order by name:
         {
           name: '_',
@@ -238,6 +226,14 @@ test('insertExtensionBundlesConfig inserts new entry', (t) =>
         {
           name: 'z',
         },
+      ]);
+
+      // expected order of keys
+      t.deepEqual(Object.keys(items[1]), [
+        'name',
+        'version',
+        'latestVersion',
+        'options',
       ]);
     },
     {extension: 'json'}
