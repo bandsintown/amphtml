@@ -1,30 +1,17 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {Layout_Enum} from '#core/dom/layout';
+import {parseJson} from '#core/types/object/json';
 
-import {Layout} from '../../../src/layout';
+import {dev, devAssert, userAssert} from '#utils/log';
+
 import {Variants, allocateVariant} from './variant';
-import {dev, devAssert, userAssert} from '../../../src/log';
-import {getServicePromiseForDoc} from '../../../src/service';
-import {parseJson} from '../../../src/json';
+
+import {getServicePromiseForDoc} from '../../../src/service-helpers';
 
 const TAG = 'amp-experiment';
 const ATTR_PREFIX = 'amp-x-';
 
 export class AmpExperiment extends AMP.BaseElement {
-  /** @override @nocollapse */
+  /** @override  */
   static prerenderAllowed() {
     /*
      * Prerender is allowed because the client_id is only used to calculate
@@ -37,7 +24,7 @@ export class AmpExperiment extends AMP.BaseElement {
 
   /** @override */
   isLayoutSupported(layout) {
-    return layout == Layout.NODISPLAY || layout == Layout.CONTAINER;
+    return layout == Layout_Enum.NODISPLAY || layout == Layout_Enum.CONTAINER;
   }
 
   /** @override */
@@ -63,7 +50,7 @@ export class AmpExperiment extends AMP.BaseElement {
             });
           });
 
-          /** @private @const {!Promise<!Object<string, ?string>>} */
+          /** @private @const {!Promise<!{[key: string]: ?string}>} */
           const experimentVariants = Promise.all(variants)
             .then(() => results)
             .then(this.addToBody_.bind(this));
@@ -95,8 +82,8 @@ export class AmpExperiment extends AMP.BaseElement {
   /**
    * Adds the given experiment and variant pairs to body element as attributes
    * and values. Experiment with no variant assigned (null) will be skipped.
-   * @param {!Object<string, ?string>} experiments
-   * @return {!Promise<!Object<string, ?string>>} a promise of the original
+   * @param {!{[key: string]: ?string}} experiments
+   * @return {!Promise<!{[key: string]: ?string}>} a promise of the original
    *     param passed in
    * @private
    */

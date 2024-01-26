@@ -1,27 +1,14 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {createElementWithAttributes} from '#core/dom';
 
 import {
   calculateEntryPointScriptUrl,
+  calculateExtensionFileUrl,
   calculateExtensionScriptUrl,
   getExtensionScripts,
   parseExtensionUrl,
-} from '../../src/service/extension-script';
-import {createElementWithAttributes} from '../../src/dom';
-import {initLogConstructor, resetLogConstructorForTesting} from '../../src/log';
+} from '#service/extension-script';
+
+import {initLogConstructor, resetLogConstructorForTesting} from '#utils/log';
 
 describes.sandboxed('Extension Location', {}, () => {
   describe('get correct script source', () => {
@@ -337,6 +324,54 @@ describes.sandboxed('Module Extension Location', {}, () => {
   });
 });
 
+describes.sandboxed('Extension File Location', {}, () => {
+  describe('get correct file location', () => {
+    beforeEach(() => {
+      // These functions must not rely on log for cases in SW.
+      resetLogConstructorForTesting();
+    });
+
+    afterEach(() => {
+      initLogConstructor();
+      window.__AMP_MODE = {};
+    });
+
+    it('with local mode', () => {
+      window.__AMP_MODE = {rtvVersion: '123'};
+      const script = calculateExtensionFileUrl(
+        window,
+        {
+          pathname: 'examples/ads.amp.html',
+          host: 'localhost:8000',
+          protocol: 'http:',
+        },
+        'some-file.json',
+        true
+      );
+      expect(script).to.equal(
+        'http://localhost:8000/dist/rtv/123/v0/some-file.json'
+      );
+    });
+
+    it('with remote mode', () => {
+      window.__AMP_MODE = {rtvVersion: '123'};
+      const script = calculateExtensionFileUrl(
+        window,
+        {
+          pathname: 'examples/ads.amp.html',
+          host: 'localhost:8000',
+          protocol: 'http:',
+        },
+        'some-file.json',
+        false
+      );
+      expect(script).to.equal(
+        'https://cdn.ampproject.org/rtv/123/v0/some-file.json'
+      );
+    });
+  });
+});
+
 describes.fakeWin('getExtensionScripts', {}, (env) => {
   let win, doc;
 
@@ -373,6 +408,22 @@ describes.fakeWin('getExtensionScripts', {}, (env) => {
         'id': 'amp-ext1-0_2',
         'custom-element': 'amp-ext1',
         'src': 'https://cdn.ampproject.org/v0/amp-ext1-0.2.js',
+      })
+    );
+
+    doc.head.appendChild(
+      createElementWithAttributes(doc, 'script', {
+        'id': 'amp-ext3-with-ssr-css-query-param-on',
+        'custom-element': 'amp-ext3',
+        'src': 'https://cdn.ampproject.org/v0/amp-ext3-0.3.js?ssr-css=1',
+      })
+    );
+
+    doc.head.appendChild(
+      createElementWithAttributes(doc, 'script', {
+        'id': 'amp-ext3-with-ssr-css-query-param-off',
+        'custom-element': 'amp-ext3',
+        'src': 'https://cdn.ampproject.org/v0/amp-ext3-0.3.js?ssr-css=0',
       })
     );
 
@@ -418,6 +469,15 @@ describes.fakeWin('getExtensionScripts', {}, (env) => {
     expect(
       ids(getExtensionScripts(win, 'amp-ext2', '0.1', true))
     ).to.deep.equal(['amp-ext2-latest']);
+  });
+
+  it('should find a specific version with ssr-css query param', () => {
+    expect(
+      ids(getExtensionScripts(win, 'amp-ext3', '0.3', true))
+    ).to.deep.equal([
+      'amp-ext3-with-ssr-css-query-param-on',
+      'amp-ext3-with-ssr-css-query-param-off',
+    ]);
   });
 
   it('should find an intermediate extension', () => {

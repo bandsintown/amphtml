@@ -1,19 +1,3 @@
-//
-// Copyright 2020 The AMP HTML Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the license.
-//
-
 // An average HTML DOM tree consists of hundreds or thousands of nodes and
 // their attributes. The malloc/new and free/delete are very expensive
 // operations for small objects and htmlparser spends majority of the time in
@@ -78,7 +62,7 @@
 // is naturally aligned if the address used to identify it has an 8-byte
 // alignment.
 //
-// Following data struture contains members totaling 13 bytes, but it's actual
+// Following data structure contains members totaling 13 bytes, but it's actual
 // size is 24 bytes due to 8 byte alignment.
 //
 // Alignment is always equal to the largest sized element in the structure.
@@ -181,8 +165,8 @@
 //    - 62 is multiple of 4?
 //     60 & (4 - 1) != 0;
 
-#ifndef HTMLPARSER__ALLOCATOR_H_
-#define HTMLPARSER__ALLOCATOR_H_
+#ifndef CPP_HTMLPARSER_ALLOCATOR_H_
+#define CPP_HTMLPARSER_ALLOCATOR_H_
 
 #include <unistd.h>  // For getpagesize()
 
@@ -217,10 +201,10 @@ class Allocator {
   Allocator& operator=(const Allocator&) = delete;
 
   // Allocates memory of same size required to construct object of type T.
-  // Returns nullptr if alloction failed.
+  // Returns nullptr if allocation failed.
   void* Allocate() {
     // Checks if remaining bytes in block are less than object size, or
-    // reamining bytes after alignment is less than object size.
+    // remaining bytes after alignment is less than object size.
     // Add a new block.
     if (object_size_ > remaining_ || !AlignFreeAddress()) {
       if (!NewBlock()) return nullptr;
@@ -354,7 +338,7 @@ class Allocator {
   }
 
   // If the block's address is not aligned, moves the pointer to the address
-  // that is multiple of aligment_.
+  // that is multiple of alignment_.
   bool AlignFreeAddress() {
     // Checks how many bytes to skip to be at the correct alignment.
     if (const std::size_t skip =
@@ -382,4 +366,4 @@ class Allocator {
 
 }  // namespace htmlparser
 
-#endif  // HTMLPARSER__ALLOCATOR_H_
+#endif  // CPP_HTMLPARSER_ALLOCATOR_H_

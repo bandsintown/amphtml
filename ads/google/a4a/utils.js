@@ -1,40 +1,22 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {whenUpgradedToCustomElement} from '#core/dom/amp-element-helpers';
+import {DomFingerprint} from '#core/dom/fingerprint';
+import {getPageLayoutBoxBlocking} from '#core/dom/layout/page-layout-box';
+import * as mode from '#core/mode';
+import {parseJson} from '#core/types/object/json';
 
-import {CONSENT_POLICY_STATE} from '../../../src/core/constants/consent-state';
-import {DomFingerprint} from '../../../src/utils/dom-fingerprint';
-import {GEO_IN_GROUP} from '../../../extensions/amp-geo/0.1/amp-geo-in-group';
-import {Services} from '../../../src/services';
+import {getBinaryType, isExperimentOn, toggleExperiment} from '#experiments';
+
+import {Services} from '#service';
+import {getTimingDataSync} from '#service/variable-source';
+
+import {dev, devAssert, user} from '#utils/log';
+
 import {buildUrl} from './shared/url-builder';
-import {dev, devAssert, user} from '../../../src/log';
-import {dict} from '../../../src/core/types/object';
-import {
-  getBinaryType,
-  isExperimentOn,
-  toggleExperiment,
-} from '../../../src/experiments';
-import {getConsentPolicyState} from '../../../src/consent';
+
+import {GEO_IN_GROUP} from '../../../extensions/amp-geo/0.1/amp-geo-in-group';
+import {getOrCreateAdCid} from '../../../src/ad-cid';
 import {getMeasuredResources} from '../../../src/ini-load';
 import {getMode} from '../../../src/mode';
-import {getOrCreateAdCid} from '../../../src/ad-cid';
-import {getPageLayoutBoxBlocking} from '../../../src/utils/page-layout-box';
-import {getTimingDataSync} from '../../../src/service/variable-source';
-import {internalRuntimeVersion} from '../../../src/internal-version';
-import {parseJson} from '../../../src/json';
-import {whenUpgradedToCustomElement} from '../../../src/dom';
 
 /** @type {string}  */
 const AMP_ANALYTICS_HEADER = 'X-AmpAnalytics';
@@ -58,8 +40,8 @@ export const ValidAdContainerTypes = {
 };
 
 /**
- * See `VisibilityState` enum.
- * @const {!Object<string, string>}
+ * See `VisibilityState_Enum` enum.
+ * @const {!{[key: string]: string}}
  */
 const visibilityStateCodes = {
   'visible': '1',
@@ -113,8 +95,9 @@ export let NameframeExperimentConfig;
  */
 export const TRUNCATION_PARAM = {name: 'trunc', value: '1'};
 
-/** @const {Object} */
-const CDN_PROXY_REGEXP = /^https:\/\/([a-zA-Z0-9_-]+\.)?cdn\.ampproject\.org((\/.*)|($))+/;
+/** @const {object} */
+const CDN_PROXY_REGEXP =
+  /^https:\/\/([a-zA-Z0-9_-]+\.)?cdn\.ampproject\.org((\/.*)|($))+/;
 
 /**
  * Returns the value of some navigation timing parameter.
@@ -194,13 +177,19 @@ export function isReportingEnabled(ampElement) {
  * @param {!Array<string>=} opt_experimentIds Any experiments IDs (in addition
  *     to those specified on the ad element) that should be included in the
  *     request.
- * @return {!Object<string,null|number|string>} block level parameters
+ * @return {!{[key: string]: null|number|string}} block level parameters
  */
 export function googleBlockParameters(a4a, opt_experimentIds) {
   const {element: adElement, win} = a4a;
   const slotRect = getPageLayoutBoxBlocking(adElement);
   const iframeDepth = iframeNestingDepth(win);
   const enclosingContainers = getEnclosingContainerTypes(adElement);
+  if (
+    a4a.uiHandler.isStickyAd() &&
+    !enclosingContainers.includes(ValidAdContainerTypes['AMP-STICKY-AD'])
+  ) {
+    enclosingContainers.push(ValidAdContainerTypes['AMP-STICKY-AD']);
+  }
   let eids = adElement.getAttribute(EXPERIMENT_ATTRIBUTE);
   if (opt_experimentIds) {
     eids = mergeExperimentIds(opt_experimentIds, eids);
@@ -223,7 +212,7 @@ export function googleBlockParameters(a4a, opt_experimentIds) {
  * @param {!../../../src/service/ampdoc-impl.AmpDoc} ampdoc
  * @param {string} type matching typing attribute.
  * @param {function(!Element):string} groupFn
- * @return {!Promise<!Object<string,!Array<!Promise<!../../../src/base-element.BaseElement>>>>}
+ * @return {!Promise<!{[key: string]: !Array<!Promise<!../../../src/base-element.BaseElement}>>>}
  */
 export function groupAmpAdsByType(ampdoc, type, groupFn) {
   // Look for amp-ad elements of correct type or those contained within
@@ -276,7 +265,7 @@ export function groupAmpAdsByType(ampdoc, type, groupFn) {
 /**
  * @param {! ../../../extensions/amp-a4a/0.1/amp-a4a.AmpA4A} a4a
  * @param {number} startTime
- * @return {!Promise<!Object<string,null|number|string>>}
+ * @return {!Promise<!{[key: string]: null|number|string}>}
  */
 export function googlePageParameters(a4a, startTime) {
   const {win} = a4a;
@@ -289,6 +278,13 @@ export function googlePageParameters(a4a, startTime) {
       dev().expectedError('AMP-A4A', 'Referrer timeout!');
       return '';
     });
+  // Collect user agent hints info
+  const uaHintsPromise = Services.timerFor(win)
+    .timeoutPromise(1000, getUserAgentClientHintParameters(win))
+    .catch(() => {
+      dev().expectedError('AMP-A4A', 'UACH timeout!');
+      return {};
+    });
   // Set dom loading time to first visible if page started in prerender state
   // determined by truthy value for visibilityState param.
   const domLoading = a4a.getAmpDoc().getParam('visibilityState')
@@ -297,10 +293,12 @@ export function googlePageParameters(a4a, startTime) {
   return Promise.all([
     getOrCreateAdCid(ampDoc, 'AMP_ECID_GOOGLE', '_ga'),
     referrerPromise,
+    uaHintsPromise,
   ]).then((promiseResults) => {
     const clientId = promiseResults[0];
     const referrer = promiseResults[1];
-    const {pageViewId, canonicalUrl} = Services.documentInfoForDoc(ampDoc);
+    const uaDataValues = promiseResults[2];
+    const {canonicalUrl, pageViewId} = Services.documentInfoForDoc(ampDoc);
     // Read by GPT for GA/GPT integration.
     win.gaGlobal = win.gaGlobal || {cid: clientId, hid: pageViewId};
     const {screen} = win;
@@ -312,7 +310,7 @@ export function googlePageParameters(a4a, startTime) {
       'is_amp': a4a.isXhrAllowed()
         ? AmpAdImplementation.AMP_AD_XHR_TO_IFRAME_OR_AMP
         : AmpAdImplementation.AMP_AD_IFRAME_GET,
-      'amp_v': internalRuntimeVersion(),
+      'amp_v': mode.version(),
       'd_imp': '1',
       'c': getCorrelator(win, ampDoc, clientId),
       'ga_cid': win.gaGlobal.cid || null,
@@ -341,6 +339,14 @@ export function googlePageParameters(a4a, startTime) {
       'loc': win.location.href == canonicalUrl ? null : win.location.href,
       'ref': referrer || null,
       'bdt': domLoading ? startTime - domLoading : null,
+      'uap': uaDataValues?.platform,
+      'uapv': uaDataValues?.platformVersion,
+      'uaa': uaDataValues?.architecture,
+      'uam': uaDataValues?.model,
+      'uafv': uaDataValues?.uaFullVersion,
+      'uab': uaDataValues?.bitness,
+      'uafvl': JSON.stringify(uaDataValues?.fullVersionList),
+      'uaw': uaDataValues?.wow64,
     };
   });
 }
@@ -349,7 +355,7 @@ export function googlePageParameters(a4a, startTime) {
  * @param {!../../../extensions/amp-a4a/0.1/amp-a4a.AmpA4A} a4a
  * @param {string} baseUrl
  * @param {number} startTime
- * @param {!Object<string,null|number|string>} parameters
+ * @param {!{[key: string]: null|number|string}} parameters
  * @param {!Array<string>=} opt_experimentIds Any experiments IDs (in addition
  *     to those specified on the ad element) that should be included in the
  *     request.
@@ -372,7 +378,7 @@ export function googleAdUrl(
 
 /**
  * @param {string} baseUrl
- * @param {!Object<string,null|number|string>} parameters
+ * @param {!{[key: string]: null|number|string}} parameters
  * @param {number} startTime
  * @return {string}
  */
@@ -523,7 +529,7 @@ function makeCorrelator(pageViewId, opt_clientId) {
 /**
  * Collect additional dimensions for the brdim parameter.
  * @param {!Window} win The window for which we read the browser dimensions.
- * @param {{width: number, height: number}|null} viewportSize
+ * @param {?{width: number, height: number}} viewportSize
  * @return {string}
  * @visibleForTesting
  */
@@ -559,11 +565,11 @@ export function additionalDimensions(win, viewportSize) {
 /**
  * Returns amp-analytics config for a new CSI trigger.
  * @param {string} on The name of the analytics trigger.
- * @param {!Object<string, string>} params Params to be included on the ping.
+ * @param {!{[key: string]: string}} params Params to be included on the ping.
  * @return {!JsonObject}
  */
 function csiTrigger(on, params) {
-  return dict({
+  return {
     'on': on,
     'request': 'csi',
     'sampleSpec': {
@@ -576,7 +582,7 @@ function csiTrigger(on, params) {
     'selector': 'amp-ad',
     'selectionMethod': 'closest',
     'extraUrlParams': params,
-  });
+  };
 }
 
 /**
@@ -584,7 +590,7 @@ function csiTrigger(on, params) {
  * @return {!JsonObject}
  */
 export function getCsiAmpAnalyticsConfig() {
-  return dict({
+  return {
     'requests': {
       'csi': 'https://csi.gstatic.com/csi?',
     },
@@ -620,7 +626,7 @@ export function getCsiAmpAnalyticsConfig() {
       // evaluated when the URL is built by amp-analytics.
       'puid': '${requestCount}~${timestamp}',
     },
-  });
+  };
 }
 
 /**
@@ -685,11 +691,11 @@ export function extractAmpAnalyticsConfig(a4a, responseHeaders) {
     if (!hasActiveViewRequests && !hasBeginToRenderRequests) {
       return null;
     }
-    const config = dict({
+    const config = {
       'transport': {'beacon': false, 'xhrpost': false},
       'requests': {},
       'triggers': {},
-    });
+    };
     if (hasActiveViewRequests) {
       generateActiveViewRequest(config, acUrls);
     }
@@ -713,7 +719,7 @@ export function extractAmpAnalyticsConfig(a4a, responseHeaders) {
  * @param {!Array<string>} urls
  */
 function generateActiveViewRequest(config, urls) {
-  config['triggers']['continuousVisible'] = dict({
+  config['triggers']['continuousVisible'] = {
     'request': [],
     'on': 'visible',
     'visibilitySpec': {
@@ -722,7 +728,7 @@ function generateActiveViewRequest(config, urls) {
       'visiblePercentageMin': 50,
       'continuousTimeMin': 1000,
     },
-  });
+  };
   for (let idx = 0; idx < urls.length; idx++) {
     // TODO: Ensure url is valid and not freeform JS?
     config['requests'][`visibility${idx + 1}`] = `${urls[idx]}`;
@@ -737,12 +743,12 @@ function generateActiveViewRequest(config, urls) {
  * @param {!Array<string>} urls
  */
 function generateBeginToRenderRequest(config, urls) {
-  config['triggers']['beginToRender'] = dict({
+  config['triggers']['beginToRender'] = {
     'request': [],
     'on': 'ini-load',
     'selector': 'amp-ad',
     'selectionMethod': 'closest',
-  });
+  };
 
   for (let idx = 0; idx < urls.length; idx++) {
     // TODO: Ensure url is valid and not freeform JS?
@@ -816,7 +822,7 @@ export function addCsiSignalsToAmpAnalyticsConfig(
     `&dt=${initTime}` +
     (eids != 'null' ? `&e.${slotId}=${eids}` : '') +
     (aexp ? `&aexp=${aexp}` : '') +
-    `&rls=${internalRuntimeVersion()}&adt.${slotId}=${adType}`;
+    `&rls=${mode.version()}&adt.${slotId}=${adType}`;
   const isAmpSuffix = isVerifiedAmpCreative ? 'Friendly' : 'CrossDomain';
   config['triggers']['continuousVisibleIniLoad'] = {
     'on': 'ini-load',
@@ -913,130 +919,6 @@ export function getBinaryTypeNumericalCode(type) {
   );
 }
 
-/** @const {!RegExp} */
-const IDENTITY_DOMAIN_REGEXP_ = /\.google\.(?:com?\.)?[a-z]{2,3}$/;
-
-/** @typedef {{
-      token: (string|undefined),
-      jar: (string|undefined),
-      pucrd: (string|undefined),
-      freshLifetimeSecs: (number|undefined),
-      validLifetimeSecs: (number|undefined),
-      fetchTimeMs: (number|undefined)
-   }} */
-export let IdentityToken;
-
-/**
- * @param {!Window} win
- * @param {!../../../src/service/ampdoc-impl.AmpDoc} ampDoc
- * @param {?string} consentPolicyId
- * @return {!Promise<!IdentityToken>}
- */
-export function getIdentityToken(win, ampDoc, consentPolicyId) {
-  // If configured to use amp-consent, delay request until consent state is
-  // resolved.
-  win['goog_identity_prom'] =
-    win['goog_identity_prom'] ||
-    (consentPolicyId
-      ? getConsentPolicyState(ampDoc.getHeadNode(), consentPolicyId)
-      : Promise.resolve(CONSENT_POLICY_STATE.UNKNOWN_NOT_REQUIRED)
-    ).then((consentState) =>
-      consentState == CONSENT_POLICY_STATE.INSUFFICIENT ||
-      consentState == CONSENT_POLICY_STATE.UNKNOWN
-        ? /** @type {!IdentityToken} */ ({})
-        : executeIdentityTokenFetch(win, ampDoc)
-    );
-  return /** @type {!Promise<!IdentityToken>} */ (win['goog_identity_prom']);
-}
-
-/**
- * @param {!Window} win
- * @param {!../../../src/service/ampdoc-impl.AmpDoc} ampDoc
- * @param {number=} redirectsRemaining (default 1)
- * @param {string=} domain
- * @param {number=} startTime
- * @return {!Promise<!IdentityToken>}
- */
-function executeIdentityTokenFetch(
-  win,
-  ampDoc,
-  redirectsRemaining = 1,
-  domain = undefined,
-  startTime = Date.now()
-) {
-  const url = getIdentityTokenRequestUrl(win, ampDoc, domain);
-  return Services.xhrFor(win)
-    .fetchJson(url, {
-      mode: 'cors',
-      method: 'GET',
-      ampCors: false,
-      credentials: 'include',
-    })
-    .then((res) => res.json())
-    .then((obj) => {
-      const token = obj['newToken'];
-      const jar = obj['1p_jar'] || '';
-      const pucrd = obj['pucrd'] || '';
-      const freshLifetimeSecs = parseInt(obj['freshLifetimeSecs'] || '', 10);
-      const validLifetimeSecs = parseInt(obj['validLifetimeSecs'] || '', 10);
-      const altDomain = obj['altDomain'];
-      const fetchTimeMs = Date.now() - startTime;
-      if (IDENTITY_DOMAIN_REGEXP_.test(altDomain)) {
-        if (!redirectsRemaining--) {
-          // Max redirects, log?
-          return {fetchTimeMs};
-        }
-        return executeIdentityTokenFetch(
-          win,
-          ampDoc,
-          redirectsRemaining,
-          altDomain,
-          startTime
-        );
-      } else if (
-        freshLifetimeSecs > 0 &&
-        validLifetimeSecs > 0 &&
-        typeof token == 'string'
-      ) {
-        return {
-          token,
-          jar,
-          pucrd,
-          freshLifetimeSecs,
-          validLifetimeSecs,
-          fetchTimeMs,
-        };
-      }
-      // returning empty
-      return {fetchTimeMs};
-    })
-    .catch((unusedErr) => {
-      // TODO log?
-      return {};
-    });
-}
-
-/**
- * @param {!Window} win
- * @param {!../../../src/service/ampdoc-impl.AmpDoc} ampDoc
- * @param {string=} domain
- * @return {string} url
- * @visibleForTesting
- */
-export function getIdentityTokenRequestUrl(win, ampDoc, domain = undefined) {
-  if (!domain && win != win.top && win.location.ancestorOrigins) {
-    const matches = IDENTITY_DOMAIN_REGEXP_.exec(
-      win.location.ancestorOrigins[win.location.ancestorOrigins.length - 1]
-    );
-    domain = (matches && matches[0]) || undefined;
-  }
-  domain = domain || '.google.com';
-  const canonical = extractHost(
-    Services.documentInfoForDoc(ampDoc).canonicalUrl
-  );
-  return `https://adservice${domain}/adsid/integrator.json?domain=${canonical}`;
-}
-
 /**
  * Returns whether we are running on the AMP CDN.
  * @param {!Window} win
@@ -1067,7 +949,7 @@ export function setNameframeExperimentConfigs(headers, nameframeConfig) {
  * than 32 capabilities to this enum.
  * @enum {number}
  */
-const Capability = {
+const Capability_Enum = {
   SVG_SUPPORTED: 1 << 0,
   SANDBOXING_ALLOW_TOP_NAVIGATION_BY_USER_ACTIVATION_SUPPORTED: 1 << 1,
   SANDBOXING_ALLOW_POPUPS_TO_ESCAPE_SANDBOX_SUPPORTED: 1 << 2,
@@ -1082,17 +964,17 @@ function getBrowserCapabilitiesBitmap(win) {
   let browserCapabilities = 0;
   const doc = win.document;
   if (win.SVGElement && doc.createElementNS) {
-    browserCapabilities |= Capability.SVG_SUPPORTED;
+    browserCapabilities |= Capability_Enum.SVG_SUPPORTED;
   }
   const iframeEl = doc.createElement('iframe');
   if (iframeEl.sandbox && iframeEl.sandbox.supports) {
     if (iframeEl.sandbox.supports('allow-top-navigation-by-user-activation')) {
       browserCapabilities |=
-        Capability.SANDBOXING_ALLOW_TOP_NAVIGATION_BY_USER_ACTIVATION_SUPPORTED;
+        Capability_Enum.SANDBOXING_ALLOW_TOP_NAVIGATION_BY_USER_ACTIVATION_SUPPORTED;
     }
     if (iframeEl.sandbox.supports('allow-popups-to-escape-sandbox')) {
       browserCapabilities |=
-        Capability.SANDBOXING_ALLOW_POPUPS_TO_ESCAPE_SANDBOX_SUPPORTED;
+        Capability_Enum.SANDBOXING_ALLOW_POPUPS_TO_ESCAPE_SANDBOX_SUPPORTED;
     }
   }
   return browserCapabilities;
@@ -1142,4 +1024,30 @@ export function getServeNpaPromise(element) {
     // Not in any of the defined geo groups.
     return false;
   });
+}
+
+/**
+ * This method retrieves the high-entropy portions of the user agent
+ * information.
+ * See https://wicg.github.io/ua-client-hints/#getHighEntropyValues
+ * @param {!Window} win
+ * @return {!Promise<!UADataValues|undefined>}
+ */
+function getUserAgentClientHintParameters(win) {
+  if (
+    !win.navigator ||
+    !win.navigator.userAgentData ||
+    typeof win.navigator.userAgentData.getHighEntropyValues !== 'function'
+  ) {
+    return Promise.resolve();
+  }
+
+  return win.navigator.userAgentData.getHighEntropyValues([
+    'platform',
+    'platformVersion',
+    'architecture',
+    'model',
+    'uaFullVersion',
+    'bitness',
+  ]);
 }

@@ -1,51 +1,33 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {CommonSignals_Enum} from '#core/constants/common-signals';
 
-import {
-  AdvanceExpToTime,
-  StoryAdAutoAdvance,
-  divertStoryAdAutoAdvance,
-} from '../../../src/experiments/story-ad-auto-advance';
+import {forceExperimentBranch} from '#experiments';
+import {divertStoryAdPlacements} from '#experiments/story-ad-placements';
+import {StoryAdSegmentExp} from '#experiments/story-ad-progress-segment';
+
+import {Services} from '#service';
+
+import {dev, devAssert, userAssert} from '#utils/log';
+
+import {getPlacementAlgo} from './algorithm-utils';
 import {
   AnalyticsEvents,
   AnalyticsVars,
   STORY_AD_ANALYTICS,
   StoryAdAnalytics,
 } from './story-ad-analytics';
-import {CSS} from '../../../build/amp-story-auto-ads-0.1.css';
-import {CommonSignals} from '../../../src/core/constants/common-signals';
-import {EventType, dispatch} from '../../amp-story/1.0/events';
-import {Services} from '../../../src/services';
-import {
-  StateProperty,
-  UIType,
-} from '../../amp-story/1.0/amp-story-store-service';
 import {StoryAdConfig} from './story-ad-config';
 import {StoryAdPageManager} from './story-ad-page-manager';
+
+import {CSS} from '../../../build/amp-story-auto-ads-0.1.css';
 import {CSS as adBadgeCSS} from '../../../build/amp-story-auto-ads-ad-badge-0.1.css';
-import {createShadowRootWithStyle} from '../../amp-story/1.0/utils';
-import {dev, devAssert, userAssert} from '../../../src/log';
-import {dict} from '../../../src/core/types/object';
-import {divertStoryAdPlacements} from '../../../src/experiments/story-ad-placements';
-import {getExperimentBranch} from '../../../src/experiments';
-import {getPlacementAlgo} from './algorithm-utils';
-import {getServicePromiseForDoc} from '../../../src/service';
-import {CSS as progessBarCSS} from '../../../build/amp-story-auto-ads-progress-bar-0.1.css';
-import {setStyle} from '../../../src/style';
 import {CSS as sharedCSS} from '../../../build/amp-story-auto-ads-shared-0.1.css';
+import {getServicePromiseForDoc} from '../../../src/service-helpers';
+import {
+  StateProperty,
+  UIType_Enum,
+} from '../../amp-story/1.0/amp-story-store-service';
+import {EventType, dispatch} from '../../amp-story/1.0/events';
+import {createShadowRootWithStyle} from '../../amp-story/1.0/utils';
 
 /** @const {string} */
 const TAG = 'amp-story-auto-ads';
@@ -56,11 +38,26 @@ const AD_TAG = 'amp-ad';
 /** @const {string} */
 const MUSTACHE_TAG = 'amp-mustache';
 
+/**
+ * Map of experiment IDs that might be enabled by the player to
+ * their experiment names. Used to toggle client side experiment on.
+ * @const {{[key: string]: string}}
+ * @visibleForTesting
+ */
+export const RELEVANT_PLAYER_EXPS = {
+  [StoryAdSegmentExp.CONTROL]: StoryAdSegmentExp.ID,
+  [StoryAdSegmentExp.AUTO_ADVANCE_OLD_CTA]: StoryAdSegmentExp.ID,
+  [StoryAdSegmentExp.AUTO_ADVANCE_NEW_CTA]: StoryAdSegmentExp.ID,
+  [StoryAdSegmentExp.AUTO_ADVANCE_NEW_CTA_NOT_ANIMATED]: StoryAdSegmentExp.ID,
+};
+
 /** @enum {string} */
 export const Attributes = {
   AD_SHOWING: 'ad-showing',
-  DESKTOP_PANELS: 'desktop-panels',
+  DESKTOP_FULLBLEED: 'desktop-fullbleed',
+  DESKTOP_ONE_PANEL: 'desktop-one-panel',
   DIR: 'dir',
+  PAUSED: 'paused',
 };
 
 export class AmpStoryAutoAds extends AMP.BaseElement {
@@ -78,16 +75,13 @@ export class AmpStoryAutoAds extends AMP.BaseElement {
     this.visibleAdPage_ = null;
 
     /** @private {!JsonObject} */
-    this.config_ = dict();
+    this.config_ = {};
 
     /** @private {?Promise} */
     this.analytics_ = null;
 
     /** @private {?Element} */
     this.adBadgeContainer_ = null;
-
-    /** @private {?Element} */
-    this.progressBarBackground_ = null;
 
     /** @private {?../../amp-story/1.0/amp-story-store-service.AmpStoryStoreService} */
     this.storeService_ = null;
@@ -101,6 +95,9 @@ export class AmpStoryAutoAds extends AMP.BaseElement {
 
   /** @override */
   buildCallback() {
+    // TODO(ccordry): properly block on this when #cap check is possible.
+    this.askPlayerForActiveExperiments_();
+
     return Services.storyStoreServiceForOrNull(this.win).then(
       (storeService) => {
         devAssert(storeService, 'Could not retrieve AmpStoryStoreService');
@@ -138,15 +135,14 @@ export class AmpStoryAutoAds extends AMP.BaseElement {
     }
     return this.ampStory_
       .signals()
-      .whenSignal(CommonSignals.INI_LOAD)
+      .whenSignal(CommonSignals_Enum.INI_LOAD)
+      .then(() => this.handleConfig_())
       .then(() => {
-        this.handleConfig_();
         this.adPageManager_ = new StoryAdPageManager(
           this.ampStory_,
           this.config_
         );
         divertStoryAdPlacements(this.win);
-        divertStoryAdAutoAdvance(this.win);
         this.placementAlgorithm_ = getPlacementAlgo(
           this.win,
           this.storeService_,
@@ -161,9 +157,39 @@ export class AmpStoryAutoAds extends AMP.BaseElement {
           STORY_AD_ANALYTICS
         );
         this.createAdOverlay_();
-        this.maybeCreateProgressBar_();
         this.initializeListeners_();
         this.initializePages_();
+      });
+  }
+
+  /**
+   * Sends message to player asking for active experiments and enables
+   * the branch for any relevant experiments.
+   */
+  askPlayerForActiveExperiments_() {
+    const viewer = Services.viewerForDoc(this.doc_);
+    if (!viewer.isEmbedded()) {
+      return;
+    }
+    viewer
+      ./*OK*/ sendMessageAwaitResponse('playerExperiments')
+      .then((expObj) => {
+        const ids = expObj?.['experimentIds'];
+        if (ids) {
+          ids.forEach((id) => {
+            const relevantExp = RELEVANT_PLAYER_EXPS[id];
+            if (relevantExp) {
+              forceExperimentBranch(this.win, relevantExp, id.toString());
+            }
+          });
+        }
+      })
+      .catch((e) => {
+        dev().expectedError(
+          TAG,
+          'Player does not support `playerExperiments` message',
+          e
+        );
       });
   }
 
@@ -173,9 +199,9 @@ export class AmpStoryAutoAds extends AMP.BaseElement {
    * @param {!StoryAdPage} adPage
    */
   forcePlaceAdAfterPage_(adPage) {
-    const pageBeforeAdId = /** @type {string} */ (this.storeService_.get(
-      StateProperty.CURRENT_PAGE_ID
-    ));
+    const pageBeforeAdId = /** @type {string} */ (
+      this.storeService_.get(StateProperty.CURRENT_PAGE_ID)
+    );
     adPage.registerLoadCallback(() =>
       this.adPageManager_
         .maybeInsertPageAfter(pageBeforeAdId, adPage)
@@ -191,10 +217,10 @@ export class AmpStoryAutoAds extends AMP.BaseElement {
     const firstAdPageElement = adPage.getPageElement();
     // Setting distance manually to avoid flash of next page.
     firstAdPageElement.setAttribute('distance', '1');
-    const payload = dict({
+    const payload = {
       'targetPageId': 'i-amphtml-ad-page-1',
       'direction': 'next',
-    });
+    };
     const eventInit = {bubbles: true};
     dispatch(
       this.win,
@@ -208,16 +234,22 @@ export class AmpStoryAutoAds extends AMP.BaseElement {
   /**
    * Sets config and installs additional extensions if necessary.
    * @private
+   * @return {Promise}
    */
   handleConfig_() {
-    this.config_ = new StoryAdConfig(this.element).getConfig();
-    if (this.config_['type'] === 'custom') {
-      Services.extensionsFor(this.win)./*OK*/ installExtensionForDoc(
-        this.element.getAmpDoc(),
-        MUSTACHE_TAG,
-        'latest'
-      );
-    }
+    return new StoryAdConfig(this.element, this.win)
+      .getConfig()
+      .then((config) => {
+        this.config_ = config;
+        if (config['type'] === 'custom') {
+          Services.extensionsFor(this.win)./*OK*/ installExtensionForDoc(
+            this.element.getAmpDoc(),
+            MUSTACHE_TAG,
+            'latest'
+          );
+        }
+        return config;
+      });
   }
 
   /**
@@ -276,14 +308,8 @@ export class AmpStoryAutoAds extends AMP.BaseElement {
     this.mutateElement(() => {
       if (isAd) {
         this.adBadgeContainer_.setAttribute(Attributes.AD_SHOWING, '');
-        // TODO(#33969) can no longer be null when launched.
-        this.progressBarBackground_ &&
-          this.progressBarBackground_.setAttribute(Attributes.AD_SHOWING, '');
       } else {
         this.adBadgeContainer_.removeAttribute(Attributes.AD_SHOWING);
-        // TODO(#33969) can no longer be null when launched.
-        this.progressBarBackground_ &&
-          this.progressBarBackground_.removeAttribute(Attributes.AD_SHOWING);
       }
     });
   }
@@ -304,21 +330,20 @@ export class AmpStoryAutoAds extends AMP.BaseElement {
   /**
    * Reacts to UI state updates and passes the information along as
    * attributes to the shadowed ad badge.
-   * @param {!UIType} uiState
+   * @param {!UIType_Enum} uiState
    * @private
    */
   onUIStateUpdate_(uiState) {
     this.mutateElement(() => {
-      const {DESKTOP_PANELS} = Attributes;
-      this.adBadgeContainer_.removeAttribute(DESKTOP_PANELS);
-      // TODO(#33969) can no longer be null when launched.
-      this.progressBarBackground_ &&
-        this.progressBarBackground_.removeAttribute(DESKTOP_PANELS);
+      const {DESKTOP_FULLBLEED, DESKTOP_ONE_PANEL} = Attributes;
+      this.adBadgeContainer_.removeAttribute(DESKTOP_FULLBLEED);
+      this.adBadgeContainer_.removeAttribute(DESKTOP_ONE_PANEL);
 
-      if (uiState === UIType.DESKTOP_PANELS) {
-        this.adBadgeContainer_.setAttribute(DESKTOP_PANELS, '');
-        this.progressBarBackground_ &&
-          this.progressBarBackground_.setAttribute(DESKTOP_PANELS, '');
+      if (uiState === UIType_Enum.DESKTOP_FULLBLEED) {
+        this.adBadgeContainer_.setAttribute(DESKTOP_FULLBLEED, '');
+      }
+      if (uiState === UIType_Enum.DESKTOP_ONE_PANEL) {
+        this.adBadgeContainer_.setAttribute(DESKTOP_ONE_PANEL, '');
       }
     });
   }
@@ -339,44 +364,8 @@ export class AmpStoryAutoAds extends AMP.BaseElement {
 
     this.adBadgeContainer_.appendChild(badge);
     createShadowRootWithStyle(root, this.adBadgeContainer_, adBadgeCSS);
+
     this.ampStory_.element.appendChild(root);
-  }
-
-  /**
-   * Create progress bar if auto advance exp is on.
-   */
-  maybeCreateProgressBar_() {
-    const autoAdvanceExpBranch = getExperimentBranch(
-      this.win,
-      StoryAdAutoAdvance.ID
-    );
-    if (
-      autoAdvanceExpBranch &&
-      autoAdvanceExpBranch !== StoryAdAutoAdvance.CONTROL
-    ) {
-      this.createProgressBar_(AdvanceExpToTime[autoAdvanceExpBranch]);
-    }
-  }
-
-  /**
-   * Create progress bar that will be shown when ad is advancing.
-   * @param {string} time
-   */
-  createProgressBar_(time) {
-    const progressBar = this.doc_.createElement('div');
-    progressBar.className = 'i-amphtml-story-ad-progress-bar';
-    setStyle(progressBar, 'animationDuration', time);
-
-    this.progressBarBackground_ = this.doc_.createElement('div');
-    this.progressBarBackground_.className =
-      'i-amphtml-story-ad-progress-background';
-
-    const host = this.doc_.createElement('div');
-    host.className = 'i-amphtml-story-ad-progress-bar-host';
-
-    this.progressBarBackground_.appendChild(progressBar);
-    createShadowRootWithStyle(host, this.progressBarBackground_, progessBarCSS);
-    this.ampStory_.element.appendChild(host);
   }
 
   /**
@@ -404,7 +393,7 @@ export class AmpStoryAutoAds extends AMP.BaseElement {
   /**
    * Respond to page navigation event. This method is not called for the first
    * page that is shown on load.
-   * @param {number} pageIndex Does not update when ad is showing.
+   * @param {number} pageIndex
    * @param {string} pageId
    * @private
    */
@@ -416,7 +405,10 @@ export class AmpStoryAutoAds extends AMP.BaseElement {
       return;
     }
 
-    this.placementAlgorithm_.onPageChange(pageId);
+    // Not a story ads page.
+    if (!this.adPageManager_.hasId(pageId)) {
+      this.placementAlgorithm_.onPageChange(pageId);
+    }
 
     if (this.visibleAdPage_) {
       this.transitionFromAdShowing_();
@@ -444,15 +436,15 @@ export class AmpStoryAutoAds extends AMP.BaseElement {
 
   /**
    * We are switching to an ad.
-   * @param {number} pageIndex
+   * @param {number} adPageIndex
    * @param {string} adPageId
    */
-  transitionToAdShowing_(pageIndex, adPageId) {
+  transitionToAdShowing_(adPageIndex, adPageId) {
     const adPage = this.adPageManager_.getAdPageById(adPageId);
     const adIndex = this.adPageManager_.getIndexById(adPageId);
 
     if (!adPage.hasBeenViewed()) {
-      this.placementAlgorithm_.onNewAdView(pageIndex);
+      this.placementAlgorithm_.onNewAdView(adPageIndex);
     }
 
     // Tell the iframe that it is visible.
@@ -492,7 +484,7 @@ export class AmpStoryAutoAds extends AMP.BaseElement {
   /**
    * Construct an analytics event and trigger it.
    * @param {string} eventType
-   * @param {!Object<string, number>} vars A map of vars and their values.
+   * @param {!{[key: string]: number}} vars A map of vars and their values.
    * @private
    */
   analyticsEvent_(eventType, vars) {

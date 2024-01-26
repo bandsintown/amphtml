@@ -1,35 +1,15 @@
-/**
- * Copyright 2015 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {getOptionalSandboxFlags, getRequiredSandboxFlags} from '#core/3p-frame';
+import {setStyle} from '#core/dom/style';
+import * as mode from '#core/mode';
+import {tryParseJson} from '#core/types/object/json';
 
+import {dev, devAssert, user, userAssert} from '#utils/log';
+
+import * as urls from './config/urls';
+import {getContextMetadata} from './iframe-attributes';
 import {assertHttpsUrl, parseUrlDeprecated} from './url';
-import {dev, devAssert, user, userAssert} from './log';
-import {dict} from './core/types/object';
-import {getContextMetadata} from '../src/iframe-attributes';
-import {getMode} from './mode';
-import {
-  getOptionalSandboxFlags,
-  getRequiredSandboxFlags,
-} from './core/3p-frame';
-import {internalRuntimeVersion} from './internal-version';
-import {isExperimentOn} from './experiments';
-import {setStyle} from './style';
-import {tryParseJson} from './json';
-import {urls} from './config';
 
-/** @type {!Object<string,number>} Number of 3p frames on the for that type. */
+/** @type {!{[key: string]: number}} Number of 3p frames on the for that type. */
 let count = {};
 
 /** @type {string} */
@@ -54,7 +34,7 @@ function getFrameAttributes(parentWindow, element, opt_type, opt_context) {
   const type = opt_type || element.getAttribute('type');
   userAssert(type, 'Attribute type required for <amp-ad>: %s', element);
   const sentinel = generateSentinel(parentWindow);
-  let attributes = dict();
+  let attributes = {};
   // Do these first, as the other attributes have precedence.
   addDataAndJsonAttributes_(element, attributes);
   attributes = getContextMetadata(parentWindow, element, sentinel, attributes);
@@ -101,9 +81,9 @@ export function getIframe(
     attributes['_context']['initialIntersection'] = initialIntersection;
   }
 
-  const iframe = /** @type {!HTMLIFrameElement} */ (parentWindow.document.createElement(
-    'iframe'
-  ));
+  const iframe = /** @type {!HTMLIFrameElement} */ (
+    parentWindow.document.createElement('iframe')
+  );
 
   if (!count[attributes['type']]) {
     count[attributes['type']] = 0;
@@ -117,16 +97,14 @@ export function getIframe(
   // be the master frame. That is ok, as we will read the name off
   // for our uses before that would occur.
   // @see https://github.com/ampproject/amphtml/blob/main/3p/integration.js
-  const name = JSON.stringify(
-    dict({
-      'host': host,
-      'bootstrap': getBootstrapUrl(attributes['type'], parentWindow),
-      'type': attributes['type'],
-      // https://github.com/ampproject/amphtml/pull/2955
-      'count': count[attributes['type']],
-      'attributes': attributes,
-    })
-  );
+  const name = JSON.stringify({
+    'host': host,
+    'bootstrap': getBootstrapUrl(attributes['type']),
+    'type': attributes['type'],
+    // https://github.com/ampproject/amphtml/pull/2955
+    'count': count[attributes['type']],
+    'attributes': attributes,
+  });
 
   iframe.src = baseUrl;
   iframe.ampLocation = parseUrlDeprecated(baseUrl);
@@ -202,22 +180,17 @@ export function addDataAndJsonAttributes_(element, attributes) {
 /**
  * Get the bootstrap script URL for iframe.
  * @param {string} type
- * @param {!Window} win
  * @return {string}
  */
-export function getBootstrapUrl(type, win) {
-  if (getMode().localDev || getMode().test) {
-    const filename = getMode().minified
-      ? `./vendor/${type}.`
-      : `./vendor/${type}.max.`;
-    return IS_ESM ? filename + 'mjs' : filename + 'js';
+export function getBootstrapUrl(type) {
+  const extension = mode.isEsm() ? '.mjs' : '.js';
+  if (mode.isProd()) {
+    return `${urls.thirdParty}/${mode.version()}/vendor/${type}${extension}`;
   }
-  if (isExperimentOn(win, '3p-vendor-split')) {
-    return IS_ESM
-      ? `${urls.thirdParty}/${internalRuntimeVersion()}/vendor/${type}.mjs`
-      : `${urls.thirdParty}/${internalRuntimeVersion()}/vendor/${type}.js`;
-  }
-  return `${urls.thirdParty}/${internalRuntimeVersion()}/f.js`;
+  const filename = mode.isMinified()
+    ? `./vendor/${type}`
+    : `./vendor/${type}.max`;
+  return filename + extension;
 }
 
 /**
@@ -233,7 +206,7 @@ export function preloadBootstrap(win, type, ampdoc, preconnect) {
 
   // While the URL may point to a custom domain, this URL will always be
   // fetched by it.
-  preconnect.preload(ampdoc, getBootstrapUrl(type, win), 'script');
+  preconnect.preload(ampdoc, getBootstrapUrl(type), 'script');
 }
 
 /**
@@ -277,7 +250,7 @@ export function resetBootstrapBaseUrlForTesting(win) {
  */
 export function getDefaultBootstrapBaseUrl(parentWindow, opt_srcFileBasename) {
   const srcFileBasename = opt_srcFileBasename || 'frame';
-  if (getMode().localDev || getMode().test) {
+  if (!mode.isProd()) {
     return getDevelopmentBootstrapBaseUrl(parentWindow, srcFileBasename);
   }
   // Ensure same sub-domain is used despite potentially different file.
@@ -287,7 +260,7 @@ export function getDefaultBootstrapBaseUrl(parentWindow, opt_srcFileBasename) {
   return (
     'https://' +
     parentWindow.__AMP_DEFAULT_BOOTSTRAP_SUBDOMAIN +
-    `.${urls.thirdPartyFrameHost}/${internalRuntimeVersion()}/` +
+    `.${urls.thirdPartyFrameHost}/${mode.version()}/` +
     `${srcFileBasename}.html`
   );
 }
@@ -303,8 +276,8 @@ export function getDevelopmentBootstrapBaseUrl(parentWindow, srcFileBasename) {
     overrideBootstrapBaseUrl ||
     getAdsLocalhost(parentWindow) +
       '/dist.3p/' +
-      (getMode().minified
-        ? `${internalRuntimeVersion()}/${srcFileBasename}`
+      (mode.isMinified()
+        ? `${mode.version()}/${srcFileBasename}`
         : `current/${srcFileBasename}.max`) +
       '.html'
   );
@@ -319,7 +292,13 @@ function getAdsLocalhost(win) {
   if (adsUrl == 'https://3p.ampproject.net') {
     adsUrl = 'http://ads.localhost'; // local dev with a localhost server
   }
-  return adsUrl + ':' + (win.location.port || win.parent.location.port);
+  return (
+    adsUrl +
+    ':' +
+    (new URL(win.document.baseURI)?.port ||
+      win.location.port ||
+      win.parent.location.port)
+  );
 }
 
 /**
@@ -386,12 +365,12 @@ function getCustomBootstrapBaseUrl(
       parsed.origin != parseUrlDeprecated(parentWindow.location.href).origin,
     '3p iframe url must not be on the same origin as the current document ' +
       '%s (%s) in element %s. See https://github.com/ampproject/amphtml' +
-      '/blob/main/spec/amp-iframe-origin-policy.md for details.',
+      '/blob/main/docs/spec/amp-iframe-origin-policy.md for details.',
     url,
     parsed.origin,
     meta
   );
-  return `${url}?${internalRuntimeVersion()}`;
+  return `${url}?${mode.version()}`;
 }
 
 /**

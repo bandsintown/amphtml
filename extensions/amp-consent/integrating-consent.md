@@ -14,11 +14,9 @@ To add your consent management service to AMP runtime, it is expected that you:
 -   Meet the restrictions that the AMP runtime applies to ensure a good user experience. These includes
     -   Enforce the size of the consent prompt. The only two allowed sizes are the initial size (`width: 100vw`, `height: 30vh`), and the full screen size (`width: 100vw`, `height: 100%`) after user interactions.
     -   A default placeholder will be displayed before the consent prompt iframe is ready.
-    -   Enforce the size of the stored consent information, when the page is served from a cache that supports the [Storage API](./../../spec/amp-localstorage.md#Storage-API). 1200 character length including storage key, consent string and additional metadata is the limit. Please [file an issue](https://github.com/ampproject/amphtml/issues/new) if you find that not sufficient.
-        -   NOTE: You can detect if the page is being served from the origin from the `checkConsentHref` request header or via `window.location.ancestorOrigin` within the iframe. Additionally, if the page is served from the cache, there is no guarantee that the LocalStorage API is supported by the viewer, and the consent information might not be persisted.
 -   Understand that including `<amp-consent type='yourName'></amp-consent>` on the page won't block any components by default. **Please make sure to inform your service users to block AMP components either by the `<meta name="amp-consent-blocking">` metaTag, or the `data-block-on-consent` attribute.**
 -   Understand that AMP Consent doesn't attempt to interpret the consent info string from the CMP. Vendors can access the consent info string from CMPs via [provided APIs](https://github.com/ampproject/amphtml/blob/main/ads/README.md#amp-consent-integration). It's up to the CMP and service provider vendors to agree on the format of the consent info string.
--   Create an [Intent-To-Implement issue](../../CONTRIBUTING.md#contributing-features) stating that you'll be adding support to your CMP service to AMP. A great start point is to follow the `_ping_` CMP service implementation that the AMP team creates for testing purpose.
+-   Create an [Intent-To-Implement issue](../../docs/contributing.md#contributing-features) stating that you'll be adding support to your CMP service to AMP. A great start point is to follow the `_ping_` CMP service implementation that the AMP team creates for testing purpose.
 
 ## Add remote endpoint support
 
@@ -27,6 +25,8 @@ A remote endpoint is expected to tell the AMP runtime whether the user consent i
 ## Prompt UI Iframe
 
 The AMP runtime will embed the CMP's prompt in an iframe. `amp-consent` will create the iframe when it is necessary. A default placeholder will be displayed, and the prompt iframe will remain hidden until it has finished loading.
+
+In case you need to enable additional sandbox restrictions to be removeed for the generated iframe, specify them in the `sandbox` configuration variable. It takes a string with space-seperated sandbox restrictions. The restrictions `allow-scripts` and `allow-popups` are removed by default. Right now, the only allowed additional sandbox restrictions are `allow-popups-to-escape-sandbox` and `allow-top-navigation-by-user-activation`.
 
 The prompt iframe and the parent AMP page will communicate through `postMessages` and the iframe `name` attribute. In the case of using postMessage, messages from nested iframes will be ignored. The lists of support APIs are:
 
@@ -95,6 +95,7 @@ window.parent.postMessage(
     action: 'accept',
     info: /string/ /* optional */,
     consentMetadata: /object/ /* optional */,
+    tcfPolicyVersion: /number/ /* optional (integer) - if not provided 2 is default */,
   },
   '*'
 );
@@ -111,6 +112,7 @@ window.parent.postMessage(
     action: 'reject',
     info: /string/ /* optional */,
     consentMetadata: /object/ /* optional */,
+    tcfPolicyVersion: /number/ /* optional (integer) - if not provided 2 is default */,
   },
   '*'
 );

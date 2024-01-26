@@ -1,52 +1,30 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {RAW_OBJECT_ARGS_KEY} from '#core/constants/action-constants';
+import {AmpEvents_Enum} from '#core/constants/amp-events';
+import {Deferred} from '#core/data-structures/promise';
+import {Signals} from '#core/data-structures/signals';
+import {isAmp4Email} from '#core/document/format';
+import {whenUpgradedToCustomElement} from '#core/dom/amp-element-helpers';
+import {escapeCssSelectorIdent} from '#core/dom/css-selectors';
+import {closestAncestorElementBySelector} from '#core/dom/query';
+import {isFiniteNumber, isObject} from '#core/types';
+import {findIndex, isArray, remove, toArray} from '#core/types/array';
+import {debounce} from '#core/types/function';
+import {deepMerge, getValueForExpr, map} from '#core/types/object';
+import {deepEquals, parseJson} from '#core/types/object/json';
 
-import {AmpEvents} from '../../../src/core/constants/amp-events';
+import {Services} from '#service';
+
+import {createCustomEvent, getDetail} from '#utils/event-helper';
+import {dev, devAssert, user} from '#utils/log';
+
 import {BindEvents} from './bind-events';
 import {BindValidator} from './bind-validator';
-import {ChunkPriority, chunk} from '../../../src/chunk';
-import {Deferred} from '../../../src/core/data-structures/promise';
-import {RAW_OBJECT_ARGS_KEY} from '../../../src/core/constants/action-constants';
-import {Services} from '../../../src/services';
-import {Signals} from '../../../src/core/data-structures/signals';
-import {
-  closestAncestorElementBySelector,
-  iterateCursor,
-  whenUpgradedToCustomElement,
-} from '../../../src/dom';
-import {createCustomEvent, getDetail} from '../../../src/event-helper';
-import {debounce} from '../../../src/core/types/function';
-import {deepEquals, getValueForExpr, parseJson} from '../../../src/json';
-import {deepMerge, dict, map} from '../../../src/core/types/object';
-import {dev, devAssert, user} from '../../../src/log';
-import {escapeCssSelectorIdent} from '../../../src/css';
-import {
-  findIndex,
-  isArray,
-  remove,
-  toArray,
-} from '../../../src/core/types/array';
-import {getMode} from '../../../src/mode';
-import {invokeWebWorker} from '../../../src/web-worker/amp-worker';
-import {isAmp4Email} from '../../../src/format';
 
-import {isFiniteNumber} from '../../../src/types';
-import {isObject} from '../../../src/core/types';
+import {ChunkPriority_Enum, chunk} from '../../../src/chunk';
 import {reportError} from '../../../src/error-reporting';
+import {getMode} from '../../../src/mode';
 import {rewriteAttributesForElement} from '../../../src/url-rewrite';
+import {invokeWebWorker} from '../../../src/web-worker/amp-worker';
 
 /** @const {string} */
 const TAG = 'amp-bind';
@@ -64,7 +42,7 @@ const AMP_CSS_RE = /^(i?-)?amp(html)?-/;
  */
 const MAX_MERGE_DEPTH = 10;
 
-/** @const {!Object<string, !Object<string, boolean>>} */
+/** @const {!{[key: string]: !{[key: string]: boolean}}} */
 const FORM_VALUE_PROPERTIES = {
   'INPUT': {
     'checked': true,
@@ -98,10 +76,19 @@ let BoundPropertyDef;
 let BoundElementDef;
 
 /**
+ * The options bag for binding application.
+ *
+ * @typedef {Record} ApplyOptionsDef
+ * @property {boolean=} skipAmpState If true, skips <amp-state> elements.
+ * @property {Array<!Element>=} constrain If provided, restricts application to children of the provided elements.
+ * @property {boolean=} evaluateOnly If provided, caches the evaluated result on each bound element and skips the actual DOM updates.
+ */
+
+/**
  * A map of tag names to arrays of attributes that do not have non-bind
  * counterparts. For instance, amp-carousel allows a `[slide]` attribute,
  * but does not support a `slide` attribute.
- * @const {!Object<string, !Array<string>>}
+ * @const {!{[key: string]: !Array<string>}}
  */
 const BIND_ONLY_ATTRIBUTES = map({
   'AMP-CAROUSEL': ['slide'],
@@ -113,7 +100,7 @@ const BIND_ONLY_ATTRIBUTES = map({
  * Elements that opt-out of tree walking in favor of rescan() with {fast: true}.
  * @const {!Array<string>}
  */
-const FAST_RESCAN_TAGS = ['AMP-LIST'];
+const FAST_RESCAN_TAGS = ['AMP-LIST', 'AMP-RENDER'];
 
 /**
  * Bind is an ampdoc-scoped service that handles the Bind lifecycle, from
@@ -159,7 +146,7 @@ export class Bind {
 
     /**
      * Maps expression string to the element(s) that contain it.
-     * @private @const {!Object<string, !Array<!Element>>}
+     * @private @const {!{[key: string]: !Array<!Element>}}
      */
     this.expressionToElements_ = map();
 
@@ -304,7 +291,7 @@ export class Bind {
 
       this.signals_.signal('FIRST_MUTATE');
 
-      const scope = dict();
+      const scope = {};
       if (event && getDetail(/** @type {!Event} */ (event))) {
         scope['event'] = getDetail(/** @type {!Event} */ (event));
       }
@@ -412,10 +399,10 @@ export class Bind {
    * @return {!Promise<?JsonObject>}
    */
   getDataForHistory_() {
-    const data = dict({
-      'data': dict({'amp-bind': this.state_}),
+    const data = {
+      'data': {'amp-bind': this.state_},
       'title': this.localWin_.document.title,
-    });
+    };
     if (!this.viewer_.isEmbedded()) {
       // CC doesn't recognize !JsonObject as a subtype of (JsonObject|null).
       return /** @type {!Promise<?JsonObject>} */ (Promise.resolve(data));
@@ -563,7 +550,7 @@ export class Bind {
         `#${escapeCssSelectorIdent(stateId)}`
       );
       if (!ampStateEl) {
-        throw new Error(`#${stateId} does not exist.`);
+        throw user().createError(TAG, `#${stateId} does not exist.`);
       }
 
       return whenUpgradedToCustomElement(ampStateEl)
@@ -613,7 +600,7 @@ export class Bind {
       })
       .then(() => {
         // Listen for DOM updates (e.g. template render) to rescan for bindings.
-        root.addEventListener(AmpEvents.DOM_UPDATE, (e) =>
+        root.addEventListener(AmpEvents_Enum.DOM_UPDATE, (e) =>
           this.onDomUpdate_(e)
         );
       })
@@ -717,7 +704,7 @@ export class Bind {
     // created elements. Should do what <amp-state> does.
     const elements = this.ampdoc.getBody().querySelectorAll('AMP-BIND-MACRO');
     const macros = /** @type {!Array<!BindMacroDef>} */ ([]);
-    iterateCursor(elements, (element) => {
+    elements.forEach((element) => {
       const argumentNames = (element.getAttribute('arguments') || '')
         .split(',')
         .map((s) => s.trim());
@@ -932,10 +919,10 @@ export class Bind {
         if (completed) {
           resolve({bindings, limitExceeded});
         } else {
-          chunk(this.ampdoc, chunktion, ChunkPriority.LOW);
+          chunk(this.ampdoc, chunktion, ChunkPriority_Enum.LOW);
         }
       };
-      chunk(this.ampdoc, chunktion, ChunkPriority.LOW);
+      chunk(this.ampdoc, chunktion, ChunkPriority_Enum.LOW);
     });
   }
 
@@ -960,7 +947,7 @@ export class Bind {
     }
     const {tagName} = element;
     boundProperties.forEach((boundProperty) => {
-      const {property, expressionString} = boundProperty;
+      const {expressionString, property} = boundProperty;
       outBindings.push({tagName, property, expressionString});
       if (!this.expressionToElements_[expressionString]) {
         this.expressionToElements_[expressionString] = [];
@@ -1042,7 +1029,7 @@ export class Bind {
         return this.ww_('bind.evaluateExpression', [expression, scope]);
       })
       .then((returnValue) => {
-        const {result, error} = returnValue;
+        const {error, result} = returnValue;
         if (error) {
           // Throw to reject promise.
           throw this.reportWorkerError_(
@@ -1057,13 +1044,13 @@ export class Bind {
 
   /**
    * Reevaluates all expressions and returns a map of expressions to results.
-   * @return {!Promise<!Object<string, BindExpressionResultDef>>}
+   * @return {!Promise<!{[key: string]: BindExpressionResultDef}>}
    * @private
    */
   evaluate_() {
     const evaluatePromise = this.ww_('bind.evaluateBindings', [this.state_]);
     return evaluatePromise.then((returnValue) => {
-      const {results, errors} = returnValue;
+      const {errors, results} = returnValue;
       // Report evaluation errors.
       Object.keys(errors).forEach((expressionString) => {
         const elements = this.expressionToElements_[expressionString];
@@ -1087,7 +1074,7 @@ export class Bind {
   /**
    * Verifies expression results vs. current DOM state and returns an
    * array of bindings with mismatches (if any).
-   * @param {Object<string, BindExpressionResultDef>} results
+   * @param {{[key: string]: BindExpressionResultDef}} results
    * @param {?Array<!Element>=} elements If provided, only verifies bindings
    *     contained within the given elements. Otherwise, verifies all bindings.
    * @param {boolean=} warn If true, emits a user warning for verification
@@ -1100,7 +1087,7 @@ export class Bind {
     const mismatches = {};
 
     this.boundElements_.forEach((boundElement) => {
-      const {element, boundProperties} = boundElement;
+      const {boundProperties, element} = boundElement;
 
       // If provided, filter elements that are _not_ children of `opt_elements`.
       if (elements && !this.elementsContains_(elements, element)) {
@@ -1117,8 +1104,8 @@ export class Bind {
           return;
         }
         const {tagName} = element;
-        const {property, expressionString} = boundProperty;
-        const {expected, actual} = mismatch;
+        const {expressionString, property} = boundProperty;
+        const {actual, expected} = mismatch;
 
         // Only store unique mismatches (dupes possible when rendering an array
         // of data to a template).
@@ -1161,7 +1148,7 @@ export class Bind {
    * will only return properties that need to be updated along with their
    * new value.
    * @param {!Array<!BoundPropertyDef>} boundProperties
-   * @param {Object<string, BindExpressionResultDef>} results
+   * @param {{[key: string]: BindExpressionResultDef}} results
    * @return {!Array<{boundProperty: !BoundPropertyDef, newValue: BindExpressionResultDef}>}
    * @private
    */
@@ -1187,13 +1174,8 @@ export class Bind {
   /**
    * Applies expression results to elements in the document.
    *
-   * @param {Object<string, BindExpressionResultDef>} results
-   * @param {!Object} opts
-   * @param {boolean=} opts.skipAmpState If true, skips <amp-state> elements.
-   * @param {Array<!Element>=} opts.constrain If provided, restricts application
-   *   to children of the provided elements.
-   * @param {boolean=} opts.evaluateOnly If provided, caches the evaluated
-   *   result on each bound element and skips the actual DOM updates.
+   * @param {{[key: string]: BindExpressionResultDef}} results
+   * @param {!ApplyOptionsDef} opts
    * @return {!Promise}
    * @private
    */
@@ -1216,7 +1198,7 @@ export class Bind {
         return;
       }
 
-      const {element, boundProperties} = boundElement;
+      const {boundProperties, element} = boundElement;
       const updates = this.calculateUpdates_(boundProperties, results);
       // If this is a "evaluate only" application, skip the DOM mutations.
       if (opts.evaluateOnly) {
@@ -1284,7 +1266,7 @@ export class Bind {
   }
 
   /**
-   * Dispatches an `AmpEvents.FORM_VALUE_CHANGE` if the element's changed
+   * Dispatches an `AmpEvents_Enum.FORM_VALUE_CHANGE` if the element's changed
    * property represents the value of a form field.
    * @param {!Element} element
    * @param {string} property
@@ -1305,7 +1287,7 @@ export class Bind {
     if (dispatchAt) {
       const ampValueChangeEvent = createCustomEvent(
         this.localWin_,
-        AmpEvents.FORM_VALUE_CHANGE,
+        AmpEvents_Enum.FORM_VALUE_CHANGE,
         /* detail */ null,
         {bubbles: true}
       );
@@ -1801,9 +1783,8 @@ class BindWalker {
       'ownerDocument is null.'
     );
 
-    const useQuerySelector = doc.documentElement.hasAttribute(
-      'i-amphtml-binding'
-    );
+    const useQuerySelector =
+      doc.documentElement.hasAttribute('i-amphtml-binding');
     /** @private @const {boolean} */
     this.useQuerySelector_ = useQuerySelector;
 

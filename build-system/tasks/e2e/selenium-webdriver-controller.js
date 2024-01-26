@@ -1,35 +1,22 @@
-/**
- * Copyright 2019 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 const fs = require('fs');
-const selenium = require('selenium-webdriver');
+const {By, Condition, Key: SeleniumKey, error} = require('selenium-webdriver');
 const {
   DOMRectDef,
   ElementHandle,
   Key,
-} = require('./functional-test-controller');
+  ScrollToOptionsDef,
+} = require('./e2e-types');
 const {ControllerPromise} = require('./controller-promise');
 const {expect} = require('chai');
 const {NetworkLogger} = require('./network-logger');
 
-const {By, Condition, Key: SeleniumKey, error} = selenium;
-
 const {NoSuchElementError} = error;
 
 const ELEMENT_WAIT_TIMEOUT = 5000;
+
+/** @typedef {import('selenium-webdriver').ISize} ISize */
+/** @typedef {import('selenium-webdriver').WebDriver} WebDriver */
+/** @typedef {import('selenium-webdriver').WebElement} WebElement */
 
 /** @enum {string} */
 const KeyToSeleniumMap = {
@@ -37,6 +24,7 @@ const KeyToSeleniumMap = {
   [Key.ArrowLeft]: SeleniumKey.ARROW_LEFT,
   [Key.ArrowRight]: SeleniumKey.ARROW_RIGHT,
   [Key.ArrowUp]: SeleniumKey.ARROW_UP,
+  [Key.Backspace]: SeleniumKey.BACK_SPACE,
   [Key.Enter]: SeleniumKey.ENTER,
   [Key.Escape]: SeleniumKey.ESCAPE,
   [Key.Tab]: SeleniumKey.TAB,
@@ -62,7 +50,7 @@ function expectCondition(valueFn, condition, opt_mutate) {
 /**
  * Make the test runner wait until the value returned by the valueFn matches
  * the given condition.
- * @param {!selenium.WebDriver} driver
+ * @param {!WebDriver} driver
  * @param {function(): !Promise<T1>} valueFn
  * @param {function(T2): ?T1} condition
  * @param {function(T1): T2} opt_mutate
@@ -84,24 +72,22 @@ async function waitFor(driver, valueFn, condition, opt_mutate) {
   return result.value; // Unbox the value.
 }
 
-/** @implements {FunctionalTestController} */
 class SeleniumWebDriverController {
   /**
-   * @param {!selenium.WebDriver} driver
+   * @param {!WebDriver} driver
    */
   constructor(driver) {
     this.driver = driver;
 
     this.networkLogger = new NetworkLogger(driver);
 
-    /** @private {?selenium.WebElement} */
+    /** @private {?WebElement} */
     this.shadowRoot_ = null;
 
     /** @private {boolean} */
     this.isXpathInstalled_ = false;
   }
 
-  // * @return {function(T1,T1): !Promise<?T1>}
   /**
    * Return a wait function. When called, the function will cause the test
    * runner to wait until the given value matches the expected value.
@@ -122,8 +108,7 @@ class SeleniumWebDriverController {
    * {@link https://github.com/SeleniumHQ/selenium/blob/6a717f20/javascript/node/selenium-webdriver/lib/until.js#L237}
    * @param {string} selector
    * @param {number=} timeout
-   * @return {!Promise<!ElementHandle<!selenium.WebElement>>}
-   * @override
+   * @return {!Promise<!ElementHandle<!WebElement>>}
    */
   async findElement(selector, timeout = ELEMENT_WAIT_TIMEOUT) {
     const bySelector = By.css(selector);
@@ -153,8 +138,7 @@ class SeleniumWebDriverController {
    * until.js#elementsLocated
    * {@link https://github.com/SeleniumHQ/selenium/blob/6a717f20/javascript/node/selenium-webdriver/lib/until.js#L258}   *
    * @param {string} selector
-   * @return {!Promise<!Array<!ElementHandle<!selenium.WebElement>>>}
-   * @override
+   * @return {!Promise<!Array<!ElementHandle<!WebElement>>>}
    */
   async findElements(selector) {
     const bySelector = By.css(selector);
@@ -178,8 +162,7 @@ class SeleniumWebDriverController {
 
   /**
    * @param {string} xpath
-   * @return {!Promise<!ElementHandle<!selenium.WebElement>>}
-   * @override
+   * @return {!Promise<!ElementHandle<!WebElement>>}
    */
   async findElementXPath(xpath) {
     await this.maybeInstallXpath_();
@@ -204,8 +187,7 @@ class SeleniumWebDriverController {
 
   /**
    * @param {string} xpath
-   * @return {!Promise<!Array<!ElementHandle<!selenium.WebElement>>>}
-   * @override
+   * @return {!Promise<!Array<!ElementHandle<!WebElement>>>}
    */
   async findElementsXPath(xpath) {
     await this.maybeInstallXpath_();
@@ -248,8 +230,7 @@ class SeleniumWebDriverController {
   }
 
   /**
-   * @return {!Promise<!ElementHandle<!selenium.WebElement>>}
-   * @override
+   * @return {!Promise<!ElementHandle<!WebElement>>}
    */
   async getActiveElement() {
     const root = await this.getRoot_();
@@ -260,8 +241,7 @@ class SeleniumWebDriverController {
   }
 
   /**
-   * @return {!Promise<!ElementHandle<!selenium.WebElement>>}
-   * @override
+   * @return {!Promise<!ElementHandle<!WebElement>>}
    */
   async getDocumentElement() {
     const root = await this.getRoot_();
@@ -271,30 +251,25 @@ class SeleniumWebDriverController {
   }
 
   /**
-   * @return {!ControllerPromise<string>}
-   * @override
+   * @return {!ControllerPromise<string|null|function>}
    */
   getCurrentUrl() {
-    return new ControllerPromise(
-      this.driver.getCurrentUrl(),
-      this.getWaitFn_(() => this.driver.getCurrentUrl())
-    );
+    const waitForFn = this.getWaitFn_(() => this.driver.getCurrentUrl());
+    return new ControllerPromise(this.driver.getCurrentUrl(), waitForFn);
   }
 
   /**
    * @param {string} location
    * @return {!Promise}
-   * @override
    */
   async navigateTo(location) {
     return this.driver.get(location);
   }
 
   /**
-   * @param {!ElementHandle<!selenium.WebElement>} handle
+   * @param {!ElementHandle<!WebElement>} handle
    * @param {string|Key} keys
    * @return {!Promise}
-   * @override
    */
   async type(handle, keys) {
     const targetElement = handle
@@ -317,7 +292,6 @@ class SeleniumWebDriverController {
    * Pastes from the clipboard by perfoming the keyboard shortcut.
    * https://stackoverflow.com/a/41046276
    * @return {!Promise}
-   * @override
    */
   pasteFromClipboard() {
     return this.driver
@@ -330,22 +304,18 @@ class SeleniumWebDriverController {
   }
 
   /**
-   * @param {!ElementHandle<!selenium.WebElement>} handle
+   * @param {!ElementHandle<!WebElement>} handle
    * @return {!Promise<string>}
-   * @override
    */
   getElementText(handle) {
     const webElement = handle.getElement();
-    return new ControllerPromise(
-      webElement.getText(),
-      this.getWaitFn_(() => webElement.getText())
-    );
+    const waitForFn = this.getWaitFn_(() => webElement.getText());
+    return new ControllerPromise(webElement.getText(), waitForFn);
   }
 
   /**
-   * @param {!ElementHandle<!selenium.WebElement>} handle
+   * @param {!ElementHandle<!WebElement>} handle
    * @return {!Promise<string>}
-   * @override
    */
   getElementTagName(handle) {
     const webElement = handle.getElement();
@@ -353,10 +323,9 @@ class SeleniumWebDriverController {
   }
 
   /**
-   * @param {!ElementHandle<!selenium.WebElement>} handle
+   * @param {!ElementHandle<!WebElement>} handle
    * @param {string} attribute
    * @return {!Promise<string>}
-   * @override
    */
   getElementAttribute(handle, attribute) {
     const webElement = handle.getElement();
@@ -370,10 +339,9 @@ class SeleniumWebDriverController {
   /**
    * Gets the element property. Note that this is different
    * than getElementAttribute()
-   * @param {!ElementHandle<!selenium.WebElement>} handle
+   * @param {!ElementHandle<!WebElement>} handle
    * @param {string} property
    * @return {!Promise<string>}
-   * @override
    */
   getElementProperty(handle, property) {
     const webElement = handle.getElement();
@@ -388,9 +356,8 @@ class SeleniumWebDriverController {
   }
 
   /**
-   * @param {!ElementHandle<!selenium.WebElement>} handle
+   * @param {!ElementHandle<!WebElement>} handle
    * @return {!Promise<!DOMRectDef>}
-   * @override
    */
   getElementRect(handle) {
     const webElement = handle.getElement();
@@ -398,14 +365,8 @@ class SeleniumWebDriverController {
       // Extracting the values seems to perform better than returning
       // the raw ClientRect from the element, in terms of flakiness.
       // The raw ClientRect also has hundredths of a pixel. We round to int.
-      const {
-        width,
-        height,
-        top,
-        bottom,
-        left,
-        right,
-      } = element./*OK*/ getBoundingClientRect();
+      const {bottom, height, left, right, top, width} =
+        element./*OK*/ getBoundingClientRect();
       return {
         x: Math.round(left),
         y: Math.round(top),
@@ -427,7 +388,6 @@ class SeleniumWebDriverController {
    * @param {!ElementHandle} handle
    * @param {string} styleProperty
    * @return {!Promise<string>} styleProperty
-   * @override
    */
   getElementCssValue(handle, styleProperty) {
     const webElement = handle.getElement();
@@ -440,7 +400,6 @@ class SeleniumWebDriverController {
   /**
    * @param {!ElementHandle} handle
    * @return {!Promise<boolean>}
-   * @override
    */
   isElementEnabled(handle) {
     const webElement = handle.getElement();
@@ -449,9 +408,20 @@ class SeleniumWebDriverController {
       this.getWaitFn_(() => webElement.isEnabled())
     );
   }
+
+  /**
+   * @param {!ElementHandle} handle
+   * @return {!Promise<boolean>}
+   */
+  isElementDisplayed(handle) {
+    const webElement = handle.getElement();
+    return new ControllerPromise(
+      webElement.isDisplayed(),
+      this.getWaitFn_(() => webElement.isDisplayed())
+    );
+  }
   /**
    * @return {!Promise<Array<string>>}
-   * @override
    */
   async getAllWindows() {
     return this.driver.getAllWindowHandles();
@@ -460,7 +430,6 @@ class SeleniumWebDriverController {
   /**
    * @param {!ElementHandle} handle
    * @return {!Promise<boolean>}
-   * @override
    */
   isElementSelected(handle) {
     const webElement = handle.getElement();
@@ -471,13 +440,24 @@ class SeleniumWebDriverController {
   }
 
   /**
+   * Get width/height of the browser area.
+   * @return {!Promise<[number, number]>}
+   */
+  async getWindowRect() {
+    const htmlElement = this.driver.findElement(By.css('html'));
+    return await Promise.all([
+      htmlElement.getAttribute('clientWidth').then(Number),
+      htmlElement.getAttribute('clientHeight').then(Number),
+    ]);
+  }
+
+  /**
    * Sets width/height of the browser area.
-   * @param {!selenium.WindowRectDef} rect
+   * @param {!ISize} rect
    * @return {!Promise}
-   * @override
    */
   async setWindowRect(rect) {
-    const {width, height} = rect;
+    const {height, width} = rect;
 
     await this.driver.manage().window().setRect({
       x: 0,
@@ -541,7 +521,6 @@ class SeleniumWebDriverController {
   /**
    * Get the title of the current document.
    * @return {!Promise<string>}
-   * @override
    */
   getTitle() {
     const getTitle = () => document.title;
@@ -554,19 +533,17 @@ class SeleniumWebDriverController {
 
   /**
    *
-   * @param {!ElementHandle<!selenium.WebElement>} handle
+   * @param {!ElementHandle<!WebElement>} handle
    * @return {!Promise}
-   * @override
    */
   async click(handle) {
     return handle.getElement().click();
   }
 
   /**
-   * @param {!ElementHandle<!selenium.WebElement>} handle
-   * @param {!selenium.ScrollToOptionsDef=} opt_scrollToOptions
+   * @param {!ElementHandle<!WebElement>} handle
+   * @param {!ScrollToOptionsDef=} opt_scrollToOptions
    * @return {!Promise}
-   * @override
    */
   async scrollBy(handle, opt_scrollToOptions) {
     const webElement = handle.getElement();
@@ -578,10 +555,9 @@ class SeleniumWebDriverController {
   }
 
   /**
-   * @param {!ElementHandle<!selenium.WebElement>} handle
-   * @param {!selenium.ScrollToOptionsDef=} opt_scrollToOptions
+   * @param {!ElementHandle<!WebElement>} handle
+   * @param {!ScrollToOptionsDef=} opt_scrollToOptions
    * @return {!Promise}
-   * @override
    */
   async scrollTo(handle, opt_scrollToOptions) {
     const webElement = handle.getElement();
@@ -595,7 +571,6 @@ class SeleniumWebDriverController {
   /**
    * @param {string} path
    * @return {!Promise<void>} An encoded string representing the image data
-   * @override
    */
   async takeScreenshot(path) {
     const imageString = await this.driver.takeScreenshot();
@@ -607,7 +582,6 @@ class SeleniumWebDriverController {
    * @param {function(): any} fn
    * @param {...*} args
    * @return {!Promise<*>}
-   * @override
    */
   evaluate(fn, ...args) {
     return this.driver.executeScript(fn, ...args);
@@ -617,7 +591,6 @@ class SeleniumWebDriverController {
    * @param {!ElementHandle} handle
    * @param {string} path
    * @return {!Promise<void>} An encoded string representing the image data
-   * @override
    */
   async takeElementScreenshot(handle, path) {
     // TODO(cvializ): Errors? Or maybe ChromeDriver hasn't yet implemented
@@ -630,14 +603,13 @@ class SeleniumWebDriverController {
   /**
    * @param {string} handle
    * @return {!Promise}
-   * @override
    */
   async switchToWindow(handle) {
     await this.driver.switchTo().window(handle);
   }
 
   /**
-   * @param {!ElementHandle<!selenium.WebElement>} handle
+   * @param {!ElementHandle<!WebElement>} handle
    * @return {!Promise}
    */
   async switchToFrame(handle) {
@@ -660,7 +632,7 @@ class SeleniumWebDriverController {
 
   /**
    * Switch controller to shadowRoot body hosted by given element.
-   * @param {!ElementHandle<!selenium.WebElement>} handle
+   * @param {!ElementHandle<!WebElement>} handle
    * @return {!Promise<void>}
    */
   async switchToShadow(handle) {
@@ -670,7 +642,7 @@ class SeleniumWebDriverController {
 
   /**
    * Switch controller to shadowRoot hosted by given element.
-   * @param {!ElementHandle<!selenium.WebElement>} handle
+   * @param {!ElementHandle<!WebElement>} handle
    * @return {!Promise<void>}
    */
   async switchToShadowRoot(handle) {
@@ -679,7 +651,7 @@ class SeleniumWebDriverController {
   }
 
   /**.
-   * @param {!ElementHandle<!selenium.WebElement>} handle
+   * @param {!ElementHandle<!WebElement>} handle
    * @param {function(): any} getter
    * @return {!Promise<void>}
    */
@@ -689,13 +661,16 @@ class SeleniumWebDriverController {
     this.shadowRoot_ = shadowRootBody;
   }
 
+  /**
+   * @return {Promise<void>}
+   */
   async switchToLight() {
     this.shadowRoot_ = null;
   }
 
   /**
    * Get the current root
-   * @return {!Promise<!selenium.WebElement>}
+   * @return {!Promise<!WebElement>}
    */
   getRoot_() {
     if (this.shadowRoot_) {
@@ -705,8 +680,11 @@ class SeleniumWebDriverController {
     return this.evaluate(() => document.documentElement);
   }
 
-  /** @override */
-  dispose() {
+  /**
+   * Shutdown the driver.
+   * @return {Promise<void>}
+   */
+  async dispose() {
     return this.driver.quit();
   }
 }

@@ -1,23 +1,9 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {isObject} from '#core/types';
+import {findIndex} from '#core/types/array';
+
+import {user} from '#utils/log';
 
 import {ExpansionOptions, variableServiceForDoc} from './variables';
-import {findIndex} from '../../../src/core/types/array';
-import {isObject} from '../../../src/core/types';
-import {user} from '../../../src/log';
 
 /**
  * A user-supplied JSON object that defines a resource to be reported. It is
@@ -119,9 +105,9 @@ function validateResourceTimingSpec(spec) {
  * @return {!Array<!PerformanceResourceTiming>}
  */
 function getResourceTimingEntries(win) {
-  return /** @type {!Array<!PerformanceResourceTiming>} */ (win.performance.getEntriesByType(
-    'resource'
-  ));
+  return /** @type {!Array<!PerformanceResourceTiming>} */ (
+    win.performance.getEntriesByType('resource')
+  );
 }
 
 /**
@@ -185,7 +171,7 @@ function nameForEntry(entry, resourcesByHost) {
  * patterns) by host pattern. This is used downstream to avoid running RegExps
  * for host patterns multiple times because we expect multiple resources to
  * use the same host pattern.
- * @param {!Object<string, !IndividualResourceSpecDef>} resourceDefs A map of
+ * @param {!{[key: string]: !IndividualResourceSpecDef}} resourceDefs A map of
  *     names to the resource spec for that name.
  * @return {!Array<!ResourceSpecForHostDef>}
  */
@@ -221,7 +207,7 @@ function groupSpecsByHost(resourceDefs) {
  * resourceDefs. It returns a new array where each element contains a
  * resource timing entry and the corresponding name.
  * @param {!Array<!PerformanceResourceTiming>} entries
- * @param {!Object<string, !IndividualResourceSpecDef>} resourceDefs
+ * @param {!{[key: string]: !IndividualResourceSpecDef}} resourceDefs
  * @return {!Array<{entry: !PerformanceResourceTiming, name: string}>}
  */
 function filterEntries(entries, resourceDefs) {

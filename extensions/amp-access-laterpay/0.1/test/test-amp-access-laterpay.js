@@ -1,18 +1,4 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {sleep} from '#testing/helpers';
 
 import {LaterpayVendor} from '../laterpay-impl';
 
@@ -273,7 +259,7 @@ describes.fakeWin(
         container.parentNode.removeChild(container);
       });
 
-      it('sends request for purchase', (done) => {
+      it('sends request for purchase', async () => {
         const changeEv = new Event('change');
         container.querySelector('input').dispatchEvent(changeEv);
         accessSourceMock
@@ -283,12 +269,10 @@ describes.fakeWin(
         accessSourceMock.expects('loginWithUrl').once();
         const clickEv = new Event('click');
         container.querySelector('button').dispatchEvent(clickEv);
-        setTimeout(() => {
-          done();
-        }, 500);
+        await sleep(500);
       });
 
-      it('sends request for already purchased', (done) => {
+      it('sends request for already purchased', async () => {
         accessSourceMock
           .expects('buildUrl')
           .returns(Promise.resolve('https://apllink'))
@@ -298,9 +282,7 @@ describes.fakeWin(
         container
           .querySelector('.' + TAG + '-already-purchased-link-container > a')
           .dispatchEvent(clickEv);
-        setTimeout(() => {
-          done();
-        }, 500);
+        await sleep(500);
       });
     });
   }

@@ -1,23 +1,8 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {remove} from '#core/types/array';
 
 import {BindExpression} from './bind-expression';
 import {BindMacro} from './bind-macro';
 import {BindValidator} from './bind-validator';
-import {remove} from '../../../src/core/types/array';
 
 /**
  * Asynchronously evaluates a set of Bind expressions.
@@ -33,14 +18,14 @@ export class BindEvaluator {
 
     /**
      * Maps `id` to parsed BindMacro objects for all <amp-bind-macro> on page.
-     * @private @const {!Object<string, !./bind-macro.BindMacro>}
+     * @private @const {!{[key: string]: !./bind-macro.BindMacro}}
      */
     this.macros_ = Object.create(null);
 
     /** @const @private {!./bind-validator.BindValidator} */
     this.validator_ = new BindValidator(allowUrlProperties);
 
-    /** @const @private {!Object<string, !BindExpression>} */
+    /** @const @private {!{[key: string]: !BindExpression}} */
     this.expressions_ = Object.create(null);
   }
 
@@ -48,7 +33,7 @@ export class BindEvaluator {
    * Parses and stores given bindings into expression objects and returns map
    * of expression string to parse errors.
    * @param {!Array<!BindBindingDef>} bindings
-   * @return {!Object<string, !BindEvaluatorErrorDef>},
+   * @return {!{[key: string]: !BindEvaluatorErrorDef}},
    */
   addBindings(bindings) {
     const errors = Object.create(null);
@@ -86,7 +71,7 @@ export class BindEvaluator {
    * Parses and stores the given macros and returns map of macro `id` to
    * parse errors.
    * @param {!Array<!BindMacroDef>} macros
-   * @return {!Object<string, !BindEvaluatorErrorDef>}
+   * @return {!{[key: string]: !BindEvaluatorErrorDef}}
    */
   addMacros(macros) {
     const errors = [];
@@ -113,9 +98,9 @@ export class BindEvaluator {
    * @return {!BindEvaluateBindingsResultDef}
    */
   evaluateBindings(scope) {
-    /** @type {!Object<string, BindExpressionResultDef>} */
+    /** @type {!{[key: string]: BindExpressionResultDef}} */
     const cache = Object.create(null);
-    /** @type {!Object<string, !BindEvaluatorErrorDef>} */
+    /** @type {!{[key: string]: !BindEvaluatorErrorDef}} */
     const errors = Object.create(null);
 
     this.setGlobals_(scope);
@@ -135,7 +120,7 @@ export class BindEvaluator {
         errors[expressionString] = {message: error.message, stack: error.stack};
         return;
       }
-      const {result, error} = this.evaluate_(expression, scope);
+      const {error, result} = this.evaluate_(expression, scope);
       if (error) {
         errors[expressionString] = error;
         return;
@@ -145,7 +130,7 @@ export class BindEvaluator {
 
     // Then, validate each binding and delete invalid expression results.
     this.bindings_.forEach((binding) => {
-      const {tagName, property, expressionString} = binding;
+      const {expressionString, property, tagName} = binding;
       const result = cache[expressionString];
       if (result === undefined) {
         return;
@@ -250,7 +235,7 @@ export class BindEvaluator {
 
   /**
    * Returns the expression cache for testing.
-   * @return {!Object<string, !BindExpression>}
+   * @return {!{[key: string]: !BindExpression}}
    * @visibleForTesting
    */
   expressionsForTesting() {

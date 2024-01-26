@@ -1,26 +1,16 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import '../../../amp-ad/0.1/amp-ad';
 import '../amp-auto-ads';
+import {getA4ARegistry} from '#ads/_a4a-config';
+
+import {waitForChild} from '#core/dom';
+
+import {toggleExperiment} from '#experiments';
+
+import {Services} from '#service';
+
+import {sleep} from '#testing/helpers';
+
 import {BaseElement} from '../../../../src/base-element';
-import {Services} from '../../../../src/services';
-import {getA4ARegistry} from '../../../../ads/_a4a-config';
-import {toggleExperiment} from '../../../../src/experiments';
-import {waitForChild} from '../../../../src/dom';
 
 class FakeA4A extends BaseElement {
   isLayoutSupported(unusedLayout) {
@@ -402,17 +392,12 @@ describes.realWin(
     });
 
     describe('Anchor Ad', () => {
-      it('should not insert anchor ad if not opted in', () => {
-        return getAmpAutoAds().then(() => {
-          return new Promise((resolve) => {
-            setTimeout(() => {
-              expect(
-                env.win.document.getElementsByTagName('AMP-STICKY-AD')
-              ).to.have.lengthOf(0);
-              resolve();
-            }, 500);
-          });
-        });
+      it('should not insert anchor ad if not opted in', async () => {
+        await getAmpAutoAds();
+        await sleep(500);
+        expect(
+          env.win.document.getElementsByTagName('AMP-STICKY-AD')
+        ).to.have.lengthOf(0);
       });
 
       it('should insert three ads plus anchor ad', () => {

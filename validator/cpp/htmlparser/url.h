@@ -1,22 +1,7 @@
-//
-// Copyright 2020 The AMP HTML Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the license.
-//
-// Uniform resouce locator parsing related static functions.
+// Uniform resource locator parsing related static functions.
 
-#ifndef HTMLPARSER__URL_H_
-#define HTMLPARSER__URL_H_
+#ifndef CPP_HTMLPARSER_URL_H_
+#define CPP_HTMLPARSER_URL_H_
 
 #include <arpa/inet.h>
 #include <cctype>
@@ -43,6 +28,9 @@ class URL {
   std::string hostname() const { return host_; }
   std::string login() const { return login_; }
   int port() const { return port_; }
+  std::string_view path_params_fragment() const {
+    return path_params_fragment_;
+  }
 
  private:
   static bool IsAlphaNum(uint8_t c) {
@@ -94,8 +82,9 @@ class URL {
   std::string login_;
   std::string host_;
   int port_;
+  std::string_view path_params_fragment_;
 };
 
 }  // namespace htmlparser
 
-#endif  // HTMLPARSER__URL_H_
+#endif  // CPP_HTMLPARSER_URL_H_

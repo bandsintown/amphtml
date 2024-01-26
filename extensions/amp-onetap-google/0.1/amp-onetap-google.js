@@ -26,17 +26,19 @@
  * </code>
  */
 
-import {ActionTrust} from '../../../src/core/constants/action-constants';
+import {ActionTrust_Enum} from '#core/constants/action-constants';
+import {removeElement} from '#core/dom';
+import {Layout_Enum} from '#core/dom/layout';
+import {px, setStyle, toggle} from '#core/dom/style';
+import {isObject} from '#core/types';
+
+import {Services} from '#service';
+
+import {getData, listen} from '#utils/event-helper';
+import {dev, devAssert, user} from '#utils/log';
+
 import {CSS} from '../../../build/amp-onetap-google-0.1.css';
-import {Layout} from '../../../src/layout';
-import {Services} from '../../../src/services';
 import {assertHttpsUrl} from '../../../src/url';
-import {dev, devAssert, user} from '../../../src/log';
-import {dict} from '../../../src/core/types/object';
-import {getData, listen} from '../../../src/event-helper';
-import {isObject} from '../../../src/core/types';
-import {px, setStyle, toggle} from '../../../src/style';
-import {removeElement} from '../../../src/dom';
 
 /** @const {string} */
 const TAG = 'amp-onetap-google';
@@ -44,7 +46,7 @@ const TAG = 'amp-onetap-google';
 /** @const {string} */
 export const SENTINEL = 'onetap_google';
 
-/** @const {Object} */
+/** @const {object} */
 export const ACTIONS = {
   READY: 'intermediate_iframe_ready',
   RESIZE: 'intermediate_iframe_resize',
@@ -71,7 +73,7 @@ export class AmpOnetapGoogle extends AMP.BaseElement {
 
   /** @override */
   isLayoutSupported(layout) {
-    return layout == Layout.NODISPLAY;
+    return layout == Layout_Enum.NODISPLAY;
   }
 
   /** @override */
@@ -119,11 +121,11 @@ export class AmpOnetapGoogle extends AMP.BaseElement {
         }
         this.postMessage_(
           event.source,
-          dict({
+          {
             'sentinel': SENTINEL,
             'command': 'parent_frame_ready',
             'nonce': nonce,
-          }),
+          },
           event.origin
         );
         break;
@@ -205,7 +207,7 @@ export class AmpOnetapGoogle extends AMP.BaseElement {
       /* source */ null,
       /* caller */ null,
       /* event */ null,
-      ActionTrust.DEFAULT
+      ActionTrust_Enum.DEFAULT
     );
     return true;
   }

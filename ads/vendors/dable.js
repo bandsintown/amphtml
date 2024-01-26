@@ -1,20 +1,4 @@
-/**
- * Copyright 2017 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-import {loadScript, validateData} from '../../3p/3p';
+import {loadScript, validateData} from '#3p/3p';
 
 /**
  * @param {!Window} global
@@ -33,7 +17,10 @@ export function dable(global, data) {
     'setService',
     data['serviceName'] || global.window.context.location.hostname
   );
-  global.dable('setURL', global.window.context.sourceUrl);
+  global.dable(
+    'setURL',
+    global.window.context.canonicalUrl || global.window.context.sourceUrl
+  );
   global.dable('setRef', global.window.context.referrer);
 
   const slot = global.document.createElement('div');
@@ -46,16 +33,43 @@ export function dable(global, data) {
   }
 
   const itemId = data['itemId'] || '';
-  const opts = {};
+  const channel = data['channel'] || '';
+  const articleSection = data['articleSection'] || '';
+  const articleSection2 = data['articleSection2'] || '';
+  const articleSection3 = data['articleSection3'] || '';
+  const orgServiceId = data['orgServiceId'] || '';
+  const widgetOpts = {};
+  const logOpts = {};
+
+  if (channel) {
+    widgetOpts.channel = channel;
+  }
+  if (articleSection) {
+    widgetOpts.category1 = articleSection;
+    logOpts.category1 = articleSection;
+  }
+  if (articleSection2) {
+    widgetOpts.category2 = articleSection2;
+    logOpts.category2 = articleSection2;
+  }
+  if (articleSection3) {
+    widgetOpts.category3 = articleSection3;
+    logOpts.category3 = articleSection3;
+  }
+  if (orgServiceId) {
+    widgetOpts.orgServiceId = orgServiceId;
+    logOpts.orgServiceId = orgServiceId;
+  }
 
   if (itemId) {
-    global.dable('sendLog', 'view', {id: itemId});
+    logOpts.id = itemId;
+    global.dable('sendLog', 'view', logOpts);
   } else {
-    opts.ignoreItems = true;
+    widgetOpts.ignoreItems = true;
   }
 
   // call render widget
-  global.dable('renderWidget', slot.id, itemId, opts, function (hasAd) {
+  global.dable('renderWidget', slot.id, itemId, widgetOpts, function (hasAd) {
     if (hasAd) {
       global.context.renderStart();
     } else {

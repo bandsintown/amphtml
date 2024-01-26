@@ -7,22 +7,6 @@ teaser:
   text: Provides the ability to collect and store a user's consent through a UI control. Also provides the ability to block other AMP components based on the user's consent.
 ---
 
-<!--
-Copyright 2018 The AMP HTML Authors. All Rights Reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS-IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
--->
-
 # amp-consent
 
 ## Overview
@@ -372,7 +356,7 @@ following value scheme `on="event:idOfAmpConsentElement.accept/reject/dismiss"`
 
 -   `accept`: publisher instructs AMP to remember the accept decision to the consent, unblocks components waiting for the consent, and hides the prompt UI.
 
--   `reject`: publisher instructs AMP to remember the reject decision to the consent, cancels `buildCallback` (AMP lifecycle callback to [build AMP components](https://github.com/ampproject/amphtml/blob/main/contributing/building-an-amp-extension.md#buildcallback)) of components waiting for the consent, and hides the prompt UI.
+-   `reject`: publisher instructs AMP to remember the reject decision to the consent, cancels `buildCallback` (AMP lifecycle callback to [build AMP components](https://github.com/ampproject/amphtml/blob/main/docs/building-an-amp-extension.md#buildcallback)) of components waiting for the consent, and hides the prompt UI.
 
 -   `dismiss`: instruct AMP to cancel `buildCallback` of components waiting for the consent, and hides the prompt UI.
 
@@ -487,22 +471,11 @@ When one of the pre-defined attributes is used, AMP assumes that the publisher t
 
 ### Customize Consent Blocking Behaviors
 
-An optional `policy` object can be added to the `<amp-consent>` element's JSON configuration object to customize consent blocking behaviors.
+An optional `policy` property can be added to the `<amp-consent>` element's JSON configuration object. Its value is an object that customizes consent blocking behaviors.
 
 ```html
 <amp-consent layout="nodisplay" id="consent-element">
   <script type="application/json">
-    {
-      "checkConsentHref"
-      "consentInstanceId": "ping2"
-      "geo": abc,
-      "extraConfig" : {
-        'id': xxx
-        'config': asdsdfasd,
-      },
-      "postPromptUI": 'test'
-    }
-
     {
       "consentInstanceId": xxx
       "checkConsentHref": "https://example.com/api/show-consent"
@@ -519,7 +492,7 @@ An optional `policy` object can be added to the `<amp-consent>` element's JSON c
 </amp-consent>
 ```
 
-Right now only customizing the `default` policy instance is supported. The "default" behavior policy applies to every component that is blocked by consent with `data-block-on-consent` attribute.
+The `default` policy is the only one allowed to be configured. This policy applies to every element that is blocked by the `data-block-on-consent` attribute.
 
 ### Policy Instance (optional)
 
@@ -647,8 +620,12 @@ Yes. See example [here](https://amp.dev/documentation/examples/user-consent/geol
 
 ##### Does AMP support the IAB TCF?
 
-AMP supports popular transparency consent frameworks including the IAB TCF v1, TCF v2 and the IAB US Privacy String.
-Please check with your consent management platform (CMP) and ad networks on their AMP support. AMP will read and pass the strings passed by the frameworks (IAB TCF v1, TCF v2 and the IAB US Privacy String) when received by CMPs/ad networks.
+AMP supports popular transparency consent frameworks including the IAB TCF v1, TCF v2, TCF v2.2 and the IAB US Privacy String.
+Please check with your consent management platform (CMP) and ad networks on their AMP support. AMP will read and pass the strings passed by the frameworks (IAB TCF v1, TCF v2, TCF v2.2 and the IAB US Privacy String) when received by CMPs/ad networks.
+
+##### I have a CMP implemented with AMP but for TCF v2 what do I need to do to support TCF v2.2?
+
+For AMP integration, the only thing you need to do is provide the value of `tcfPolicyVersion` during the client-side `postMessage`, and in case you also use `checkConsentHref` you need to provide it in the response, and you can also update it directly from the response too via the `tcfPolicyVersion` field in the response from your server, this will allow you to update consents in case you have not added the tcfPolicyVersion field before the transaction to TCF v2.2.
 
 ##### I can't see feature X being supported, what can I do?
 
@@ -664,9 +641,12 @@ Join in on the discussion where we are discussing [upcoming potential features](
 
 ## Supported Consent Management Platforms
 
--   AppConsent : [Website](https://appconsent.io/en) - [Documentation](./cmps/appconsent.md)
+<!-- markdown-link-check-disable -->
+
+-   AppConsent : [Website](https://sfbx.io/en/produits/) - [Documentation](./cmps/appconsent.md)
 -   ConsentManager : [Website](https://www.consentmanager.net/) - [Documentation](https://help.consentmanager.net/books/cmp/page/using-the-cmp-with-amp-websites)
 -   Didomi : [Website](https://www.didomi.io/) - [Documentation](https://developers.didomi.io/cmp/amp)
+-   Funding Choices : [Website](https://fundingchoices.google.com/start) - [Documentation](./cmps/googlefc.md)
 -   iubenda : [Website](https://www.iubenda.com/) - [Documentation](./cmps/iubenda.md)
 -   LiveRamp : [Website](https://liveramp.com/our-platform/preference-consent-management/) - [Documentation](./cmps/liveramp.md)
 -   Marfeel : [Website](https://www.marfeel.com/) - [Documentation](./cmps/marfeel.md)

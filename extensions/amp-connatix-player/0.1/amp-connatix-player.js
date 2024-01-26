@@ -1,44 +1,39 @@
-/**
- * Copyright 2019 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import {
   CONSENT_POLICY_STATE,
   CONSENT_STRING_TYPE,
-} from '../../../src/core/constants/consent-state';
-import {Deferred} from '../../../src/core/data-structures/promise';
-import {PauseHelper} from '../../../src/utils/pause-helper';
-import {Services} from '../../../src/services';
-import {addParamsToUrl} from '../../../src/url';
-import {dict} from '../../../src/core/types/object';
+} from '#core/constants/consent-state';
+import {Deferred} from '#core/data-structures/promise';
+import {
+  dispatchCustomEvent,
+  getDataParamsFromAttributes,
+  removeElement,
+} from '#core/dom';
+import {applyFillContent, isLayoutSizeDefined} from '#core/dom/layout';
+import {
+  observeContentSize,
+  unobserveContentSize,
+} from '#core/dom/layout/size-observer';
+import {PauseHelper} from '#core/dom/video/pause-helper';
+import {tryParseJson} from '#core/types/object/json';
+
+import {Services} from '#service';
+import {installVideoManagerForDoc} from '#service/video-manager-impl';
+
+import {getData} from '#utils/event-helper';
+import {userAssert} from '#utils/log';
+
 import {
   getConsentMetadata,
   getConsentPolicyInfo,
   getConsentPolicySharedData,
   getConsentPolicyState,
 } from '../../../src/consent';
-import {getData} from '../../../src/event-helper';
-import {isLayoutSizeDefined} from '../../../src/layout';
+import {mutedOrUnmutedEvent, redispatch} from '../../../src/iframe-video';
+import {addParamsToUrl} from '../../../src/url';
 import {
-  observeContentSize,
-  unobserveContentSize,
-} from '../../../src/utils/size-observer';
-import {removeElement} from '../../../src/dom';
-import {setIsMediaComponent} from '../../../src/video-interface';
-import {tryParseJson} from '../../../src/json';
-import {userAssert} from '../../../src/log';
+  VideoEvents_Enum,
+  setIsMediaComponent,
+} from '../../../src/video-interface';
 
 /**
  * @param {!Array<T>} promises
@@ -83,7 +78,7 @@ export class AmpConnatixPlayer extends AMP.BaseElement {
     this.mediaId_ = '';
 
     /** @private {string} */
-    this.iframeDomain_ = 'https://cdm.connatix.com';
+    this.iframeDomain_ = null;
 
     /** @private {?HTMLIFrameElement} */
     this.iframe_ = null;
@@ -98,6 +93,15 @@ export class AmpConnatixPlayer extends AMP.BaseElement {
 
     /** @private @const */
     this.pauseHelper_ = new PauseHelper(this.element);
+
+    /** @private {boolean} */
+    this.isFullscreen_ = false;
+
+    /** @private {boolean} */
+    this.muted_ = true;
+
+    /** @private {?MutationObserver} */
+    this.mutationObserver_ = null;
   }
 
   /**
@@ -120,13 +124,11 @@ export class AmpConnatixPlayer extends AMP.BaseElement {
 
       if (iframe.contentWindow) {
         iframe.contentWindow./*OK*/ postMessage(
-          JSON.stringify(
-            dict({
-              'event': 'command',
-              'func': command,
-              'args': opt_args || '',
-            })
-          ),
+          JSON.stringify({
+            'event': 'command',
+            'func': command,
+            'args': opt_args || '',
+          }),
           this.iframeDomain_
         );
       }
@@ -165,7 +167,24 @@ export class AmpConnatixPlayer extends AMP.BaseElement {
           this.playerReadyResolver_(this.iframe_);
           break;
         }
+        case 'cnxContentPlaying': {
+          this.pauseHelper_.updatePlaying(true);
+          break;
+        }
+        case 'cnxContentPaused': {
+          this.pauseHelper_.updatePlaying(false);
+          break;
+        }
+        case 'cnxFullscreenChanged': {
+          this.isFullscreen_ = !this.isFullscreen_;
+          break;
+        }
       }
+
+      redispatch(this.element, dataJSON['func'].toString(), {
+        'cnxContentPlaying': VideoEvents_Enum.PLAYING,
+        'cnxContentPaused': VideoEvents_Enum.PAUSE,
+      });
     });
   }
 
@@ -243,6 +262,8 @@ export class AmpConnatixPlayer extends AMP.BaseElement {
   buildCallback() {
     const {element} = this;
 
+    installVideoManagerForDoc(element);
+
     setIsMediaComponent(element);
 
     // Player id is mandatory
@@ -254,7 +275,13 @@ export class AmpConnatixPlayer extends AMP.BaseElement {
 
     // Media id is optional
     this.mediaId_ = element.getAttribute('data-media-id') || '';
-
+    const elementsPlayer =
+      element.getAttribute('data-elements-player') || false;
+    if (elementsPlayer) {
+      this.iframeDomain_ = 'https://cdm.elements.video';
+    } else {
+      this.iframeDomain_ = 'https://amp.cntxcdm.com';
+    }
     // will be used by sendCommand in order to send only after the player is rendered
     const deferred = new Deferred();
     this.playerReadyPromise_ = deferred.promise;
@@ -278,11 +305,12 @@ export class AmpConnatixPlayer extends AMP.BaseElement {
   layoutCallback() {
     const {element} = this;
     // Url Params for iframe source
-    const urlParams = dict({
+    const urlParams = {
       'playerId': this.playerId_ || undefined,
       'mediaId': this.mediaId_ || undefined,
       'url': Services.documentInfoForDoc(element).sourceUrl,
-    });
+      ...getDataParamsFromAttributes(element),
+    };
     const iframeUrl = this.iframeDomain_ + '/amp-embed/index.html';
     const src = addParamsToUrl(iframeUrl, urlParams);
 
@@ -292,19 +320,49 @@ export class AmpConnatixPlayer extends AMP.BaseElement {
     iframe.src = src;
 
     // applyFillContent so that frame covers the entire component.
-    this.applyFillContent(iframe, /* replacedContent */ true);
+    applyFillContent(iframe, /* replacedContent */ true);
 
     // append child iframe for element
     element.appendChild(iframe);
     this.iframe_ = /** @type {HTMLIFrameElement} */ (iframe);
+
+    Services.videoManagerForDoc(element).register(this);
 
     // bind to player events (playerRendered after we can send commands to player and other)
     this.bindToPlayerCommands_();
     // bind to amp consent and send consent info to the iframe content and propagate to player
     this.bindToAmpConsent_();
 
+    if (!this.mutationObserver_) {
+      const mutationObserverCallback = (mutationList) => {
+        for (const mutation of mutationList) {
+          if (
+            mutation.type === 'attributes' &&
+            mutation.attributeName === 'class'
+          ) {
+            this.sendCommand_(
+              mutation.target.classList.contains('i-amphtml-video-docked')
+                ? 'dock'
+                : 'undock'
+            );
+          }
+        }
+      };
+
+      this.mutationObserver_ = new MutationObserver(mutationObserverCallback);
+    }
+
+    const mutationObserverConfig = {
+      attributes: true,
+      childList: false,
+      subtree: false,
+    };
+
+    this.mutationObserver_.observe(this.iframe_, mutationObserverConfig);
+
     observeContentSize(this.element, this.onResized_);
     this.pauseHelper_.updatePlaying(true);
+    dispatchCustomEvent(this.element, mutedOrUnmutedEvent(this.muted_));
 
     return this.loadPromise(iframe).then(() => this.playerReadyPromise_);
   }
@@ -318,7 +376,7 @@ export class AmpConnatixPlayer extends AMP.BaseElement {
    * @param {!../layout-rect.LayoutSizeDef} size
    * @private
    */
-  onResized_({width, height}) {
+  onResized_({height, width}) {
     if (!this.iframe_) {
       return;
     }
@@ -344,9 +402,120 @@ export class AmpConnatixPlayer extends AMP.BaseElement {
     this.playerReadyResolver_ = deferred.resolve;
 
     unobserveContentSize(this.element, this.onResized_);
+    this.mutationObserver_.disconnect();
     this.pauseHelper_.updatePlaying(false);
 
     return true;
+  }
+
+  // VideoInterface Implementation. See ../src/video-interface.VideoInterface
+
+  /** @override */
+  supportsPlatform() {
+    return true;
+  }
+
+  /** @override */
+  isInteractive() {
+    return true;
+  }
+
+  /** @override */
+  play(unusedIsAutoplay) {
+    this.sendCommand_('play');
+  }
+
+  /** @override */
+  pause() {
+    this.sendCommand_('pause');
+  }
+
+  /** @override */
+  mute() {
+    this.muted_ = true;
+    dispatchCustomEvent(this.element, mutedOrUnmutedEvent(this.muted_));
+    this.sendCommand_('mute');
+  }
+
+  /** @override */
+  unmute() {
+    this.muted_ = false;
+    dispatchCustomEvent(this.element, mutedOrUnmutedEvent(this.muted_));
+    this.sendCommand_('unmute');
+  }
+
+  /** @override */
+  showControls() {
+    // Not supported.
+  }
+
+  /** @override */
+  hideControls() {
+    // Not supported.
+  }
+
+  /** @override */
+  fullscreenEnter() {
+    if (!this.iframe_) {
+      return;
+    }
+
+    this.sendCommand_('enterFullscreen');
+  }
+
+  /** @override */
+  fullscreenExit() {
+    if (!this.iframe_) {
+      return;
+    }
+
+    this.sendCommand_('exitFullscreen');
+  }
+
+  /** @override */
+  isFullscreen() {
+    if (!this.iframe_) {
+      return false;
+    }
+    return this.isFullscreen_;
+  }
+
+  /** @override */
+  getMetadata() {
+    // Not implemented
+  }
+
+  /** @override */
+  preimplementsMediaSessionAPI() {
+    return true;
+  }
+
+  /** @override */
+  preimplementsAutoFullscreen() {
+    return false;
+  }
+
+  /** @override */
+  getCurrentTime() {
+    // Not implemented
+    return NaN;
+  }
+
+  /** @override */
+  getDuration() {
+    // Not implemented
+    return NaN;
+  }
+
+  /** @override */
+  getPlayedRanges() {
+    // Not supported.
+    return [];
+  }
+
+  /** @override */
+  seekTo(unusedTimeSeconds) {
+    this.user().error('TAG', '`seekTo` not supported.');
   }
 }
 

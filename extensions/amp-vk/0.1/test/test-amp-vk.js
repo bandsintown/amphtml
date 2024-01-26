@@ -1,18 +1,7 @@
-/**
- * Copyright 2017 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import '../amp-vk';
+import {Layout_Enum} from '#core/dom/layout';
+
+import {Resource} from '#service/resource';
 
 const POST_PARAMS = {
   'embedtype': 'post',
@@ -26,10 +15,6 @@ const POLL_PARAMS = {
   'api-id': '6183531',
   'poll-id': '274086843_1a2a465f60fff4699f',
 };
-
-import '../amp-vk';
-import {Layout} from '../../../../src/layout';
-import {Resource} from '../../../../src/service/resource';
 
 describes.realWin(
   'amp-vk',
@@ -129,14 +114,20 @@ describes.realWin(
     });
 
     it('post::renders responsively', async () => {
-      const vkPost = await createAmpVkElement(POST_PARAMS, Layout.RESPONSIVE);
+      const vkPost = await createAmpVkElement(
+        POST_PARAMS,
+        Layout_Enum.RESPONSIVE
+      );
       const iframe = vkPost.querySelector('iframe');
       expect(iframe).to.not.be.null;
       expect(iframe.className).to.match(/i-amphtml-fill-content/);
     });
 
     it('post::sets correct src url to the vk iFrame', async () => {
-      const vkPost = await createAmpVkElement(POST_PARAMS, Layout.RESPONSIVE);
+      const vkPost = await createAmpVkElement(
+        POST_PARAMS,
+        Layout_Enum.RESPONSIVE
+      );
       const impl = await vkPost.getImpl(false);
       const iframe = vkPost.querySelector('iframe');
       const referrer = encodeURIComponent(vkPost.ownerDocument.referrer);
@@ -181,14 +172,20 @@ describes.realWin(
     });
 
     it('poll::renders responsively', async () => {
-      const vkPoll = await createAmpVkElement(POLL_PARAMS, Layout.RESPONSIVE);
+      const vkPoll = await createAmpVkElement(
+        POLL_PARAMS,
+        Layout_Enum.RESPONSIVE
+      );
       const iframe = vkPoll.querySelector('iframe');
       expect(iframe).to.not.be.null;
       expect(iframe.className).to.match(/i-amphtml-fill-content/);
     });
 
     it('poll::sets correct src url to the vk iFrame', async () => {
-      const vkPoll = await createAmpVkElement(POLL_PARAMS, Layout.RESPONSIVE);
+      const vkPoll = await createAmpVkElement(
+        POLL_PARAMS,
+        Layout_Enum.RESPONSIVE
+      );
       const iframe = vkPoll.querySelector('iframe');
       const referrer = encodeURIComponent(vkPoll.ownerDocument.referrer);
       const url = encodeURIComponent(

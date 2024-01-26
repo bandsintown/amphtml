@@ -1,23 +1,9 @@
-/**
- * Copyright 2021 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {user} from '#utils/log';
+
+import {macroTask} from '#testing/helpers';
+import {mockWindowInterface} from '#testing/helpers/service';
 
 import {TcfApiCommandManager} from '../tcf-api-command-manager';
-import {macroTask} from '../../../../testing/yield';
-import {mockWindowInterface} from '../../../../testing/test-helper';
-import {user} from '../../../../src/log';
 
 describes.realWin(
   'tcf api commands',
@@ -36,15 +22,17 @@ describes.realWin(
       let msg;
       let tcfApiCommandManager;
       let mockTcString;
+      let mockTcfPolicyVersion;
       let mockSharedData;
       let callId;
 
       beforeEach(() => {
-        mockWin = mockWindowInterface(window.sandbox);
-        mockWin.postMessage = window.sandbox.spy();
+        mockWin = mockWindowInterface(env.sandbox);
+        mockWin.postMessage = env.sandbox.spy();
         mockMetadata = {};
         mockSharedData = {};
         mockTcString = '';
+        mockTcfPolicyVersion = null;
         mockPolicyManager = {
           getConsentMetadataInfo: (opt_policy) => {
             return Promise.resolve(mockMetadata);
@@ -55,7 +43,10 @@ describes.realWin(
           getMergedSharedData: (opt_policy) => {
             return Promise.resolve(mockSharedData);
           },
-          setOnPolicyChange: window.sandbox.spy(),
+          getTcfPolicyVersion: (opt_policy) => {
+            return Promise.resolve(mockTcfPolicyVersion);
+          },
+          setOnPolicyChange: env.sandbox.spy(),
         };
       });
 
@@ -128,12 +119,12 @@ describes.realWin(
           mockMetadata = getMetadata(false);
           tcfApiCommandManager = new TcfApiCommandManager(mockPolicyManager);
           expect(
-            tcfApiCommandManager.getMinimalPingReturnForTesting(mockMetadata)
+            tcfApiCommandManager.getMinimalPingReturnForTesting(mockMetadata, 4)
           ).to.deep.equals({
             gdprApplies: false,
             cmpLoaded: true,
             cmpStatus: 'loaded',
-            tcfPolicyVersion: 2,
+            tcfPolicyVersion: 4,
           });
         });
 
@@ -203,16 +194,19 @@ describes.realWin(
           });
 
           mockTcString = 'abc123';
+          mockTcfPolicyVersion = 4;
           mockSharedData = {'data': 'data1'};
 
           expect(
             tcfApiCommandManager.getMinimalTcDataForTesting(
               mockMetadata,
               mockSharedData,
-              mockTcString
+              mockTcString,
+              undefined,
+              mockTcfPolicyVersion
             )
           ).to.deep.equals({
-            tcfPolicyVersion: 2,
+            tcfPolicyVersion: mockTcfPolicyVersion,
             gdprApplies: false,
             tcString: mockTcString,
             listenerId: undefined,
@@ -223,11 +217,40 @@ describes.realWin(
           });
         });
 
+        it('sends a minimal TcData via PostMessage without tcfPolicyVersion stored - fallback to tcfPolicyVersion 2', async () => {
+          callId = 'getTcDataId';
+          data = getData('getTCData', callId);
+          mockMetadata = getMetadata(false, 'xyz987', false);
+          mockTcString = 'abc123';
+          mockSharedData = {'data': 'data1'};
+          tcfApiCommandManager = new TcfApiCommandManager(mockPolicyManager);
+          tcfApiCommandManager.handleTcfCommand(data, mockWin);
+          await macroTask();
+
+          const postMessageArgs = mockWin.postMessage.args[0];
+          const tcfApiReturn = getTcfApiReturn(
+            callId,
+            tcfApiCommandManager.getMinimalTcDataForTesting(
+              mockMetadata,
+              mockSharedData,
+              mockTcString
+            ),
+            true
+          );
+          expect(
+            postMessageArgs[0]['__tcfapiReturn']['returnValue'][
+              'tcfPolicyVersion'
+            ]
+          ).to.be.equal(2);
+          expect(postMessageArgs[0]).to.deep.equals(tcfApiReturn);
+        });
+
         it('sends a minimal TcData via PostMessage', async () => {
           callId = 'getTcDataId';
           data = getData('getTCData', callId);
           mockMetadata = getMetadata(false, 'xyz987', false);
           mockTcString = 'abc123';
+          mockTcfPolicyVersion = 4;
           mockSharedData = {'data': 'data1'};
           tcfApiCommandManager = new TcfApiCommandManager(mockPolicyManager);
           tcfApiCommandManager.handleTcfCommand(data, mockWin);
@@ -240,7 +263,9 @@ describes.realWin(
               tcfApiCommandManager.getMinimalTcDataForTesting(
                 mockMetadata,
                 mockSharedData,
-                mockTcString
+                mockTcString,
+                undefined,
+                mockTcfPolicyVersion
               ),
               true
             )

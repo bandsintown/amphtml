@@ -1,24 +1,12 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {devAssert} from '#core/assert';
+
+import {Services} from '#service';
+import {calculateEntryPointScriptUrl} from '#service/extension-script';
+
+import {dev} from '#utils/log';
 
 import {ModeDef, getMode} from '../mode';
-import {Services} from '../services';
-import {calculateEntryPointScriptUrl} from '../service/extension-script';
-import {dev, devAssert} from '../log';
-import {getService, registerServiceBuilder} from '../service';
+import {getService, registerServiceBuilder} from '../service-helpers';
 
 const TAG = 'web-worker';
 
@@ -84,12 +72,39 @@ class AmpWorker {
     // Use RTV to make sure we fetch prod/canary/experiment correctly.
     const useLocal = getMode().localDev || getMode().test;
     const useRtvVersion = !useLocal;
-    const url = calculateEntryPointScriptUrl(
-      loc,
-      'ww',
-      useLocal,
-      useRtvVersion
-    );
+
+    let url = '';
+
+    let policy = {
+      createScriptURL: function (url) {
+        // Only allow the correct webworker url to pass through
+        const regexURL =
+          /^https:\/\/([a-zA-Z0-9_-]+\.)?cdn\.ampproject\.org(\/.*)?$/;
+
+        if (
+          (regexURL.test(url) || getMode().test || getMode().localDev) &&
+          (url.endsWith('ww.js') ||
+            url.endsWith('ww.min.js') ||
+            url.endsWith('ww.mjs') ||
+            url.endsWith('ww.min.mjs'))
+        ) {
+          return url;
+        } else {
+          return '';
+        }
+      },
+    };
+
+    if (self.trustedTypes && self.trustedTypes.createPolicy) {
+      policy = self.trustedTypes.createPolicy('amp-worker#fetchUrl', policy);
+    }
+
+    url = policy
+      .createScriptURL(
+        calculateEntryPointScriptUrl(loc, 'ww', useLocal, useRtvVersion)
+      )
+      .toString();
+
     dev().fine(TAG, 'Fetching web worker from', url);
 
     /** @private {Worker} */
@@ -115,13 +130,26 @@ class AmpWorker {
           type: 'text/javascript',
         });
         const blobUrl = win.URL.createObjectURL(blob);
-        this.worker_ = new win.Worker(blobUrl);
+        if (self.trustedTypes && self.trustedTypes.createPolicy) {
+          // We can trust the url for this policy usage because the blobUrl pulls the script from a controlled source, the ww.js file.
+          const policy = self.trustedTypes.createPolicy(
+            'amp-worker#constructor',
+            {
+              createScriptURL: function (url) {
+                return url;
+              },
+            }
+          );
+          this.worker_ = new win.Worker(policy.createScriptURL(blobUrl));
+        } else {
+          this.worker_ = new win.Worker(blobUrl);
+        }
         this.worker_.onmessage = this.receiveMessage_.bind(this);
       });
 
     /**
      * Array of in-flight messages pending response from worker.
-     * @const @private {!Object<number, PendingMessageDef>}
+     * @const @private {!{[key: number]: PendingMessageDef}}
      */
     this.messages_ = {};
 
@@ -175,11 +203,9 @@ class AmpWorker {
    * @private
    */
   receiveMessage_(event) {
-    const {
-      method,
-      returnValue,
-      id,
-    } = /** @type {FromWorkerMessageDef} */ (event.data);
+    const {id, method, returnValue} = /** @type {FromWorkerMessageDef} */ (
+      event.data
+    );
 
     const message = this.messages_[id];
     if (!message) {

@@ -1,23 +1,9 @@
-/**
- * Copyright 2017 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {isArray} from '#core/types';
+import {base64DecodeToBytes} from '#core/types/string/base64';
 
-import {Services} from '../../../src/services';
-import {base64DecodeToBytes} from '../../../src/utils/base64';
-import {dev, devAssert, user} from '../../../src/log';
-import {isArray} from '../../../src/core/types';
+import {Services} from '#service';
+
+import {dev, devAssert, user} from '#utils/log';
 
 /** @visibleForTesting */
 export const AMP_SIGNATURE_HEADER = 'AMP-Fast-Fetch-Signature';
@@ -75,14 +61,14 @@ export const VerificationStatus = {
 export class SignatureVerifier {
   /**
    * @param {!Window} win
-   * @param {!Object<string, string>} signingServerURLs a map from the name of
+   * @param {!{[key: string]: string}} signingServerURLs a map from the name of
    *    each trusted signing service to the URL of its public key endpoint
    */
   constructor(win, signingServerURLs) {
     /** @private @const {!Window} */
     this.win_ = win;
 
-    /** @private @const {!Object<string, string>} */
+    /** @private @const {!{[key: string]: string}} */
     this.signingServerURLs_ = signingServerURLs;
 
     /**
@@ -119,7 +105,7 @@ export class SignatureVerifier {
      *    successfully; this most likely indicates signing service misbehavior.
      *    The success case is a `Promise` that resolves to a `CryptoKey`.
      *
-     * @private @const {?Object<string, {promise: !Promise<boolean>, keys: !Object<string, ?Promise<?webCrypto.CryptoKey>>}>}
+     * @private @const {?{[key: string]: {promise: !Promise<boolean>, keys: !{[key: string]: ?Promise<?webCrypto.CryptoKey>}}}}
      */
     this.signers_ = Services.cryptoFor(win).isPkcsAvailable() ? {} : null;
 
@@ -167,7 +153,8 @@ export class SignatureVerifier {
    * @return {!Promise<!VerificationStatus>}
    */
   verify(creative, headers) {
-    const signatureFormat = /^([A-Za-z0-9._-]+):([A-Za-z0-9._-]+):([A-Za-z0-9+/]{341}[AQgw]==)$/;
+    const signatureFormat =
+      /^([A-Za-z0-9._-]+):([A-Za-z0-9._-]+):([A-Za-z0-9+/]{341}[AQgw]==)$/;
     if (!headers.has(AMP_SIGNATURE_HEADER)) {
       return Promise.resolve(VerificationStatus.UNVERIFIED);
     }
@@ -291,7 +278,7 @@ export class SignatureVerifier {
    * Try to download the keyset for the named signing service and add a promise
    * for each key to the `keys` object.
    *
-   * @param {!Object<string, ?Promise<?webCrypto.CryptoKey>>} keys the object to
+   * @param {!{[key: string]: ?Promise<?webCrypto.CryptoKey>}} keys the object to
    *     add each key promise to. This is mutated while the returned promise is
    *     pending.
    * @param {string} signingServiceName

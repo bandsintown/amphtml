@@ -125,30 +125,39 @@ The `errorReportingUrl` property is optional. The only available macros are ERRO
 
 -   Admax
 -   Adpushup
--   AppNexus
 -   AppNexus PSP
 -   APS
 -   Automatad
 -   Andbeyond
 -   Browsi
 -   Criteo
+-   Denakop
 -   FLUX
 -   Freestar
 -   Future Plc
 -   Galaxie Media
 -   Highfivve
+-   Hubvisor
+-   [Improve Digital](https://www.improvedigital.com)
 -   IndexExchange
 -   Kargo
--   NewsPassID
 -   Lotame
 -   Media.net
+-   Mediasquare
+-   Navegg
+-   NewsPassID
 -   Nexx360.io
 -   OpenX
 -   PubMatic OpenWrap
+-   [PubWise](https://www.pubwise.io)
 -   Purch
+-   RichAudience
 -   Rubicon
 -   Salesforce
+-   [Snigel](https://www.snigel.com)
+-   Sonobi
 -   T13
+-   Tail
 -   The Ozone Project
 -   Yieldbot
 -   Yieldlab
@@ -179,7 +188,7 @@ The RTC callout endpoint must use HTTPS. HTTP requests are forbidden.
 The RTC Response to a GET request must meet the following requirements:
 
 -   Status Code = 200
--   See [here for Required Headers](https://github.com/ampproject/amphtml/blob/main/spec/amp-cors-requests.md#ensuring-secure-responses) and note that Access-Control-Allow-Credentials: true must be present for cookies to be included in the request.
+-   See [here for Required Headers](https://github.com/ampproject/amphtml/blob/main/docs/spec/amp-cors-requests.md#ensuring-secure-responses) and note that Access-Control-Allow-Credentials: true must be present for cookies to be included in the request.
 -   Body of response is a JSON object of targeting information such as:
     -   **<code>{"targeting": {"sport":["rugby","cricket"]}}</code>**</strong>
     -   The response body must be JSON, but the actual structure of that data need not match the structure here. Refer to Fast Fetch Network specific documentation for the required spec. (for example, if using DoubleClick, refer to DoubleClick docs).
@@ -608,9 +617,9 @@ This is not allowed:
 
 <table>
   <tr>
-   <td>Callout 1: <a href="`https://www.vendor1.com/foo?slot_id=1234"`>`https://www.vendor1.com/foo?slot_id=1234`</a>
+   <td>Callout 1: `https://www.vendor1.com/foo?slot_id=1234`
 <p>
-Callout 2: <a href="`https://www.vendor1.com/foo?slot_id=1234`">`https://www.vendor1.com/foo?slot_id=1234`</a>
+Callout 2: `https://www.vendor1.com/foo?slot_id=1234`
    </td>
   </tr>
   <tr>
@@ -623,9 +632,9 @@ This is allowed:
 
 <table>
   <tr>
-   <td>Callout 1: <a href="`https://www.vendor1.com/foo?slot_id=1234`">`https://www.vendor1.com/foo?slot_id=1234`</a>
+   <td>Callout 1: `https://www.vendor1.com/foo?slot_id=1234`
 <p>
-Callout 2: <a href="`https://www.vendor1.com/foo?slot_id=1234`">`https://www.vendor1.com/foo?slot_id=5678`</a>
+Callout 2: `https://www.vendor1.com/foo?slot_id=5678`
    </td>
   </tr>
   <tr>

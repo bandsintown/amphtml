@@ -1,23 +1,13 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {Deferred} from '#core/data-structures/promise';
+import {rootNodeFor} from '#core/dom';
+import {scopedQuerySelector} from '#core/dom/query';
 
-import {Deferred} from '../core/data-structures/promise';
-import {getServiceForDoc, registerServiceBuilderForDoc} from '../service';
-import {rootNodeFor, scopedQuerySelector} from '../dom';
-import {userAssert} from '../log';
+import {userAssert} from '#utils/log';
+
+import {
+  getServiceForDoc,
+  registerServiceBuilderForDoc,
+} from '../service-helpers';
 
 /**
  * @fileoverview
@@ -44,14 +34,14 @@ export class Templates {
 
     /**
      * A map from template type to template's class promise.
-     * @private @const {!Object<string, !Promise<typeof ../base-template.BaseTemplate>>}
+     * @private @const {!{[key: string]: !Promise<typeof ../base-template.BaseTemplate>}}
      */
     this.templateClassMap_ = {};
 
     /**
      * A map from template type to template's class promise. This is a transient
      * storage. As soon as the template class loaded, the entry is removed.
-     * @private @const {!Object<string, function(typeof ../base-template.BaseTemplate)>}
+     * @private @const {!{[key: string]: function(typeof ../base-template.BaseTemplate)}}
      */
     this.templateClassResolvers_ = {};
   }
@@ -98,6 +88,23 @@ export class Templates {
   renderTemplateAsString(templateElement, data) {
     return this.getImplementation_(templateElement).then((impl) => {
       return impl.renderAsString(data);
+    });
+  }
+
+  /**
+   * Resolves to a reusable template renderer.
+   *
+   * @param {!Element} templateElement
+   * @return {Promise<{
+   *   renderAsString: function(*=): string
+   * }>}
+   */
+  getTemplateRenderer(templateElement) {
+    return this.getImplementation_(templateElement).then((impl) => {
+      const renderer = {
+        renderAsString: (data) => impl.renderAsString(data),
+      };
+      return renderer;
     });
   }
 
@@ -215,9 +222,9 @@ export class Templates {
   maybeFindTemplate(parent, opt_querySelector) {
     const templateId = parent.getAttribute('template');
     if (templateId) {
-      const rootNode = /** @type {!Document|!ShadowRoot} */ (rootNodeFor(
-        parent
-      ));
+      const rootNode = /** @type {!Document|!ShadowRoot} */ (
+        rootNodeFor(parent)
+      );
       return rootNode.getElementById(templateId);
     } else if (opt_querySelector) {
       return scopedQuerySelector(parent, opt_querySelector);
@@ -257,7 +264,9 @@ export class Templates {
     promise = this.waitForTemplateClass_(element, type).then(
       (templateClass) => {
         // This is ugly workaround for https://github.com/google/closure-compiler/issues/2630.
-        const Constr = /** @type {function(new:Object, !Element, !Window)} */ (templateClass);
+        const Constr = /** @type {function(new:Object, !Element, !Window)} */ (
+          templateClass
+        );
         const impl = (element[PROP_] = new Constr(element, this.ampdoc_.win));
         delete element[PROP_PROMISE_];
         return impl;

@@ -1,20 +1,4 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-import {map} from '../src/core/types/object';
+import {map} from '#core/types/object';
 
 /**
  * Registry for A4A (AMP Ads for AMPHTML pages) "is supported" predicates.
@@ -27,22 +11,25 @@ import {map} from '../src/core/types/object';
  * Otherwise, it will attempt to render the ad via the existing "3p iframe"
  * pathway (delay load into a cross-domain iframe).
  *
- * @type {!Object<string, function(!Window, !Element): boolean>}
+ * @type {!{[key: string]: function(!Window, !Element): boolean}}
  */
 let a4aRegistry;
 
 /**
  * Returns the a4a registry map
- * @return {Object}
+ * @return {object}
  */
 export function getA4ARegistry() {
   if (!a4aRegistry) {
     a4aRegistry = map({
       'adsense': () => true,
       'adzerk': () => true,
+      'dianomi': () => true,
       'doubleclick': () => true,
       'fake': () => true,
+      'mgid': (win, adTag) => !adTag.hasAttribute('data-container'),
       'nws': () => true,
+      'smartadserver': () => true,
       'valueimpression': () => true,
       // TODO: Add new ad network implementation "is enabled" functions here.
       // Note: if you add a function here that requires a new "import", above,
@@ -57,7 +44,7 @@ export function getA4ARegistry() {
 
 /**
  * An object mapping signing server names to their corresponding URLs.
- * @type {!Object<string, string>}
+ * @type {!{[key: string]: string}}
  */
 export const signingServerURLs = {
   'google': 'https://cdn.ampproject.org/amp-ad-verifying-keyset.json',

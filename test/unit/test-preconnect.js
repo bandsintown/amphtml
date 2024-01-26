@@ -1,22 +1,9 @@
-/**
- * Copyright 2015 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import * as fakeTimers from '@sinonjs/fake-timers';
-import {Services} from '../../src/services';
-import {createIframePromise} from '../../testing/iframe';
+
+import {Services} from '#service';
+
+import {createIframePromise} from '#testing/iframe';
+
 import {
   installPreconnectService,
   preconnectToOrigin,
@@ -319,35 +306,31 @@ describes.sandboxed('preconnect', {}, (env) => {
     });
   });
 
-  // TODO(cramforce, #11827): Make this test work on Safari.
-  it.configure()
-    .skipSafari()
-    .skipFirefox()
-    .run('should add links if feature if detected', () => {
-      // Don't stub preload support allow the test to run through the browser
-      // default regardless of support or not.
-      return getPreconnectIframe(/* detectFeatures */ true).then((iframe) => {
-        preconnect.preload(ampdoc, 'https://a.prefetch.com/foo/bar', 'script');
-        preconnect.preload(ampdoc, 'https://a.prefetch.com/foo/bar');
-        preconnect.preload(ampdoc, 'https://a.prefetch.com/other', 'style');
-        preconnect.preload(ampdoc, javascriptUrlPrefix + ':alert()');
+  it('should add links if feature if detected', () => {
+    // Don't stub preload support allow the test to run through the browser
+    // default regardless of support or not.
+    return getPreconnectIframe(/* detectFeatures */ true).then((iframe) => {
+      preconnect.preload(ampdoc, 'https://a.prefetch.com/foo/bar', 'script');
+      preconnect.preload(ampdoc, 'https://a.prefetch.com/foo/bar');
+      preconnect.preload(ampdoc, 'https://a.prefetch.com/other', 'style');
+      preconnect.preload(ampdoc, javascriptUrlPrefix + ':alert()');
+      const fetches = iframe.doc.querySelectorAll('link[rel=preload]');
+      expect(fetches).to.have.length(0);
+      return visiblePromise.then(() => {
+        expect(
+          iframe.doc.querySelectorAll('link[rel=preconnect]')
+        ).to.have.length(1);
+        expect(iframe.doc.querySelector('link[rel=preconnect]').href).to.equal(
+          'https://a.prefetch.com/'
+        );
         const fetches = iframe.doc.querySelectorAll('link[rel=preload]');
-        expect(fetches).to.have.length(0);
-        return visiblePromise.then(() => {
-          expect(
-            iframe.doc.querySelectorAll('link[rel=preconnect]')
-          ).to.have.length(1);
-          expect(
-            iframe.doc.querySelector('link[rel=preconnect]').href
-          ).to.equal('https://a.prefetch.com/');
-          const fetches = iframe.doc.querySelectorAll('link[rel=preload]');
-          expect(fetches).to.have.length(2);
-          expect(fetches[0].href).to.equal('https://a.prefetch.com/foo/bar');
-          expect(fetches[1].href).to.equal('https://a.prefetch.com/other');
-          expect(fetches[0].getAttribute('referrerpolicy')).to.equal('origin');
-        });
+        expect(fetches).to.have.length(2);
+        expect(fetches[0].href).to.equal('https://a.prefetch.com/foo/bar');
+        expect(fetches[1].href).to.equal('https://a.prefetch.com/other');
+        expect(fetches[0].getAttribute('referrerpolicy')).to.equal('origin');
       });
     });
+  });
 
   it('should preload', () => {
     preloadSupported = true;

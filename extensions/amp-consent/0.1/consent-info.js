@@ -1,45 +1,32 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {CONSENT_STRING_TYPE} from '#core/constants/consent-state';
+import {isEnumValue, isObject} from '#core/types';
+import {hasOwn, map} from '#core/types/object';
+import {deepEquals} from '#core/types/object/json';
 
-import {CONSENT_STRING_TYPE} from '../../../src/core/constants/consent-state';
-import {deepEquals} from '../../../src/json';
-import {dev, user} from '../../../src/log';
-import {hasOwn, map} from '../../../src/core/types/object';
-import {isEnumValue, isObject} from '../../../src/core/types';
+import {dev, user} from '#utils/log';
 
 const TAG = 'amp-consent';
 
 /**
  * Key values for retriving/storing consent info object.
- * STATE: Set when user accept or reject consent.
+ * VERSION: Set when a consent string is provided to store its version.
  * STRING: Set when a consent string is used to store more granular consent info
  * on vendors.
+ * STATE: Set when user accept or reject consent.
+ * PURPOSE_CONSENTS: Set when consents for purposes are passed in for client side
+ * granular consent. Only values ACCEPT and REJECT signals are stored.
  * METADATA: Set when consent metadata is passed in to store more granular consent info
  * on vendors.
  * DITRYBIT: Set when the stored consent info need to be revoked next time.
- * PURPOSE_CONSENTS: Set when consents for purposes are passed in for client side
- * granular consent. Only values ACCEPT and REJECT signals are stored.
  * @enum {string}
  */
 export const STORAGE_KEY = {
-  STATE: 's',
+  VERSION: 'e',
   STRING: 'r',
-  IS_DIRTY: 'd',
-  METADATA: 'm',
+  STATE: 's',
   PURPOSE_CONSENTS: 'pc',
+  METADATA: 'm',
+  IS_DIRTY: 'd',
 };
 
 /**
@@ -94,8 +81,9 @@ export const TCF_POST_MESSAGE_API_COMMANDS = {
  *  consentState: CONSENT_ITEM_STATE,
  *  consentString: (string|undefined),
  *  consentMetadata: (ConsentMetadataDef|undefined),
- *  purposeConsents: (Object<string, PURPOSE_CONSENT_STATE>|undefined),
+ *  purposeConsents: ({[key: string]: PURPOSE_CONSENT_STATE}|undefined),
  *  isDirty: (boolean|undefined),
+ *  tcfPolicyVersion: (number|undefined),
  * }}
  */
 export let ConsentInfoDef;
@@ -134,7 +122,8 @@ export function getStoredConsentInfo(value) {
     value[STORAGE_KEY.STRING],
     convertStorageMetadata(value[STORAGE_KEY.METADATA]),
     value[STORAGE_KEY.PURPOSE_CONSENTS],
-    value[STORAGE_KEY.IS_DIRTY] && value[STORAGE_KEY.IS_DIRTY] === 1
+    value[STORAGE_KEY.IS_DIRTY] && value[STORAGE_KEY.IS_DIRTY] === 1,
+    value[STORAGE_KEY.VERSION]
   );
 }
 
@@ -193,6 +182,10 @@ export function composeStoreValue(consentInfo) {
 
   if (consentInfo['consentString']) {
     obj[STORAGE_KEY.STRING] = consentInfo['consentString'];
+  }
+
+  if (consentInfo['tcfPolicyVersion']) {
+    obj[STORAGE_KEY.VERSION] = consentInfo['tcfPolicyVersion'];
   }
 
   if (consentInfo['isDirty'] === true) {
@@ -263,12 +256,15 @@ export function isConsentInfoStoredValueSame(infoA, infoB, opt_isDirty) {
       infoA['purposeConsents'],
       infoB['purposeConsents']
     );
+    const tcfPolicyVersionEqual =
+      infoA['tcfPolicyVersion'] == infoB['tcfPolicyVersion'];
     return (
       stateEqual &&
       stringEqual &&
       metadataEqual &&
       purposeConsentsEqual &&
-      isDirtyEqual
+      isDirtyEqual &&
+      tcfPolicyVersionEqual
     );
   }
   return false;
@@ -290,8 +286,9 @@ function getLegacyStoredConsentInfo(value) {
  * @param {CONSENT_ITEM_STATE} consentState
  * @param {string=} opt_consentString
  * @param {ConsentMetadataDef=} opt_consentMetadata
- * @param {Object<string, PURPOSE_CONSENT_STATE>=} opt_purposeConsents
+ * @param {{[key: string]: PURPOSE_CONSENT_STATE}=} opt_purposeConsents
  * @param {boolean=} opt_isDirty
+ * @param {number=} opt_tcfPolicyVersion
  * @return {!ConsentInfoDef}
  */
 export function constructConsentInfo(
@@ -299,7 +296,8 @@ export function constructConsentInfo(
   opt_consentString,
   opt_consentMetadata,
   opt_purposeConsents,
-  opt_isDirty
+  opt_isDirty,
+  opt_tcfPolicyVersion
 ) {
   return {
     'consentState': consentState,
@@ -307,6 +305,7 @@ export function constructConsentInfo(
     'consentMetadata': opt_consentMetadata,
     'purposeConsents': opt_purposeConsents,
     'isDirty': opt_isDirty,
+    'tcfPolicyVersion': opt_tcfPolicyVersion,
   };
 }
 
@@ -401,7 +400,7 @@ export function getConsentStateValue(enumState) {
  * {'ga': true, 'cst': 2}
  *
  * @param {ConsentMetadataDef=} consentInfoMetadata
- * @return {Object}
+ * @return {object}
  */
 export function composeMetadataStoreValue(consentInfoMetadata) {
   const storageMetadata = map();

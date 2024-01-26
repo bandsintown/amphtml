@@ -1,18 +1,3 @@
-/**
- * Copyright 2019 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 'use strict';
 
 const fs = require('fs-extra');
@@ -25,34 +10,27 @@ const {
 const {
   gitBranchCreationPoint,
   gitBranchName,
+  gitCiMainBaseline,
   gitCommitHash,
   gitDiffCommitLog,
   gitDiffStatMain,
-  gitCiMainBaseline,
   shortSha,
 } = require('../common/git');
 const {cyan, green, yellow} = require('kleur/colors');
-const {execOrDie, execOrThrow, execWithError, exec} = require('../common/exec');
+const {exec, execOrDie, execOrThrow, execWithError} = require('../common/exec');
 const {getLoggingPrefix, logWithoutTimestamp} = require('../common/logging');
-const {replaceUrls} = require('../tasks/pr-deploy-bot-utils');
+const {getStdout} = require('../common/process');
 
 const UNMINIFIED_CONTAINER_DIRECTORY = 'unminified';
 const NOMODULE_CONTAINER_DIRECTORY = 'nomodule';
 const MODULE_CONTAINER_DIRECTORY = 'module';
 
-const ARTIFACT_FILE_NAME = '/tmp/artifacts/amp_nomodule_build.tar.gz';
+const FILELIST_PATH = '/tmp/filelist.txt';
 
-const BUILD_OUTPUT_DIRS = ['build', 'dist', 'dist.3p'];
-const APP_SERVING_DIRS = [
-  ...BUILD_OUTPUT_DIRS,
-  'dist.tools',
-  'examples',
-  'test/manual',
-  'test/fixtures/e2e',
-];
+const BUILD_OUTPUT_DIRS = ['build', 'dist', 'dist.3p', 'dist.tools'];
 
 const GIT_BRANCH_URL =
-  'https://github.com/ampproject/amphtml/blob/main/contributing/getting-started-e2e.md#create-a-git-branch';
+  'https://github.com/ampproject/amphtml/blob/main/docs/getting-started-e2e.md#create-a-git-branch';
 
 /**
  * Prints a summary of files changed by, and commits included in the PR.
@@ -134,13 +112,16 @@ function signalGracefulHalt() {
  * for skipping.
  * @param {string} jobName
  * @param {string} skipReason
+ * @param {boolean} gracefullyHaltNextJobs true to signal to downstreams jobs that they too should be skipped.
  */
-function skipDependentJobs(jobName, skipReason) {
+function skipDependentJobs(jobName, skipReason, gracefullyHaltNextJobs = true) {
   const loggingPrefix = getLoggingPrefix();
   logWithoutTimestamp(
     `${loggingPrefix} Skipping ${cyan(jobName)} because ${skipReason}.`
   );
-  signalGracefulHalt();
+  if (gracefullyHaltNextJobs) {
+    signalGracefulHalt();
+  }
 }
 
 /**
@@ -244,10 +225,13 @@ function storeBuildToWorkspace_(containerDirectory) {
   if (isCircleciBuild()) {
     fs.ensureDirSync(`/tmp/workspace/builds/${containerDirectory}`);
     for (const outputDir of BUILD_OUTPUT_DIRS) {
-      fs.moveSync(
-        `${outputDir}/`,
-        `/tmp/workspace/builds/${containerDirectory}/${outputDir}`
-      );
+      const outputPath = `${outputDir}/`;
+      if (fs.existsSync(outputPath)) {
+        fs.moveSync(
+          outputPath,
+          `/tmp/workspace/builds/${containerDirectory}/${outputDir}`
+        );
+      }
     }
   }
 }
@@ -282,30 +266,29 @@ function storeExperimentBuildToWorkspace(exp) {
 }
 
 /**
- * Replaces URLS in HTML files, compresses and stores nomodule build in CI artifacts.
+ * Generates a file with a comma-separated list of test file paths that CircleCI
+ * should execute in a parallelized job shard.
+ *
+ * @param {!Array<string>} globs array of glob strings for finding test file paths.
  */
-async function processAndStoreBuildToArtifacts() {
-  if (!isCircleciBuild()) {
-    return;
-  }
-
-  await replaceUrls('test/manual');
-  await replaceUrls('examples');
-
-  const loggingPrefix = getLoggingPrefix();
-
+function generateCircleCiShardTestFileList(globs) {
+  const joinedGlobs = globs.map((glob) => `"${glob}"`).join(' ');
+  const fileList = getStdout(
+    `circleci tests glob ${joinedGlobs} | circleci tests split --split-by=timings`
+  )
+    .trim()
+    .replace(/\s+/g, ',');
+  fs.writeFileSync(FILELIST_PATH, fileList, 'utf8');
   logWithoutTimestamp(
-    `\n${loggingPrefix} Compressing ` +
-      cyan(APP_SERVING_DIRS.join(', ')) +
-      ' into ' +
-      cyan(ARTIFACT_FILE_NAME) +
-      '...'
+    'Stored list of',
+    cyan(fileList.split(',').length),
+    'test files in',
+    cyan(FILELIST_PATH)
   );
-  execOrDie(`tar -czf ${ARTIFACT_FILE_NAME} ${APP_SERVING_DIRS.join('/ ')}/`);
-  execOrDie(`du -sh ${ARTIFACT_FILE_NAME}`);
 }
 
 module.exports = {
+  FILELIST_PATH,
   abortTimedJob,
   printChangeSummary,
   skipDependentJobs,
@@ -319,5 +302,5 @@ module.exports = {
   storeNomoduleBuildToWorkspace,
   storeModuleBuildToWorkspace,
   storeExperimentBuildToWorkspace,
-  processAndStoreBuildToArtifacts,
+  generateCircleCiShardTestFileList,
 };

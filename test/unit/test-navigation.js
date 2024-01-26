@@ -1,26 +1,13 @@
-/**
- * Copyright 2015 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {createElementWithAttributes} from '#core/dom';
+
+import {Services} from '#service';
+import {maybeExpandUrlParamsForTesting} from '#service/navigation';
+import {installUrlReplacementsServiceForDoc} from '#service/url-replacements-impl';
+
+import {macroTask} from '#testing/helpers';
 
 import * as Impression from '../../src/impression';
-import {Services} from '../../src/services';
 import {addParamToUrl} from '../../src/url';
-import {createElementWithAttributes} from '../../src/dom';
-import {installUrlReplacementsServiceForDoc} from '../../src/service/url-replacements-impl';
-import {macroTask} from '../../testing/yield';
-import {maybeExpandUrlParamsForTesting} from '../../src/service/navigation';
 
 describes.sandboxed('Navigation', {}, () => {
   let event;
@@ -852,118 +839,113 @@ describes.sandboxed('Navigation', {}, () => {
       },
     },
     (env) => {
-      // TODO(dvoytenko, #11827): Make this test work on Safari.
-      describe
-        .configure()
-        .skipSafari()
-        .run('fie embed', () => {
-          let win, doc;
-          let parentWin;
-          let ampdoc;
-          let embed;
-          let handler;
-          let winOpenStub;
-          let scrollIntoViewStub;
-          let replaceStateForTargetStub;
-          let replaceStateForTargetPromise;
-          let anchor;
-          let elementWithId;
-          let anchorWithName;
+      describe('fie embed', () => {
+        let win, doc;
+        let parentWin;
+        let ampdoc;
+        let embed;
+        let handler;
+        let winOpenStub;
+        let scrollIntoViewStub;
+        let replaceStateForTargetStub;
+        let replaceStateForTargetPromise;
+        let anchor;
+        let elementWithId;
+        let anchorWithName;
 
-          beforeEach(() => {
-            win = env.win;
-            doc = win.document;
-            ampdoc = env.ampdoc;
-            parentWin = env.parentWin;
-            embed = env.embed;
+        beforeEach(() => {
+          win = env.win;
+          doc = win.document;
+          ampdoc = env.ampdoc;
+          parentWin = env.parentWin;
+          embed = env.embed;
 
-            handler = ampdoc.__AMP_SERVICES.navigation.obj;
-            winOpenStub = env.sandbox.stub(win, 'open').callsFake(() => {
-              return {};
-            });
-            const viewport = parentWin.__AMP_SERVICES.viewport.obj;
-            scrollIntoViewStub = env.sandbox.stub(viewport, 'scrollIntoView');
-            const history = parentWin.__AMP_SERVICES.history.obj;
-            replaceStateForTargetPromise = Promise.resolve();
-            replaceStateForTargetStub = env.sandbox
-              .stub(history, 'replaceStateForTarget')
-              .callsFake(() => replaceStateForTargetPromise);
+          handler = ampdoc.__AMP_SERVICES.navigation.obj;
+          winOpenStub = env.sandbox.stub(win, 'open').callsFake(() => {
+            return {};
+          });
+          const viewport = parentWin.__AMP_SERVICES.viewport.obj;
+          scrollIntoViewStub = env.sandbox.stub(viewport, 'scrollIntoView');
+          const history = parentWin.__AMP_SERVICES.history.obj;
+          replaceStateForTargetPromise = Promise.resolve();
+          replaceStateForTargetStub = env.sandbox
+            .stub(history, 'replaceStateForTarget')
+            .callsFake(() => replaceStateForTargetPromise);
 
-            anchor = doc.createElement('a');
-            anchor.href = 'http://ads.localhost:8000/example';
-            doc.body.appendChild(anchor);
-            event.target = anchor;
+          anchor = doc.createElement('a');
+          anchor.href = 'http://ads.localhost:8000/example';
+          doc.body.appendChild(anchor);
+          event.target = anchor;
 
-            // Navigation uses the UrlReplacements service scoped to the event
-            // target, but for testing stub in the top-level service for simplicity.
-            const {documentElement} = parentWin.document;
-            const urlReplacements = Services.urlReplacementsForDoc(
-              documentElement
-            );
-            env.sandbox
-              .stub(Services, 'urlReplacementsForDoc')
-              .withArgs(anchor)
-              .returns(urlReplacements);
+          // Navigation uses the UrlReplacements service scoped to the event
+          // target, but for testing stub in the top-level service for simplicity.
+          const {documentElement} = parentWin.document;
+          const urlReplacements =
+            Services.urlReplacementsForDoc(documentElement);
+          env.sandbox
+            .stub(Services, 'urlReplacementsForDoc')
+            .withArgs(anchor)
+            .returns(urlReplacements);
 
-            elementWithId = doc.createElement('div');
-            elementWithId.id = 'test';
-            doc.body.appendChild(elementWithId);
+          elementWithId = doc.createElement('div');
+          elementWithId.id = 'test';
+          doc.body.appendChild(elementWithId);
 
-            anchorWithName = doc.createElement('a');
-            anchorWithName.setAttribute('name', 'test2');
-            doc.body.appendChild(anchorWithName);
+          anchorWithName = doc.createElement('a');
+          anchorWithName.setAttribute('name', 'test2');
+          doc.body.appendChild(anchorWithName);
+        });
+
+        it('should adopt correctly to embed', () => {
+          expect(handler.ampdoc).to.equal(ampdoc);
+          expect(handler.rootNode_).to.equal(embed.win.document);
+          expect(handler.isEmbed_).to.be.true;
+        });
+
+        describe('when linking to a different origin or path', () => {
+          it('should update target to _blank', () => {
+            anchor.href = 'https://www.google.com/some-other-path';
+            handler.handle_(event);
+            expect(event.defaultPrevented).to.be.false;
+            expect(winOpenStub).to.not.be.called;
+            expect(scrollIntoViewStub).to.not.be.called;
+            expect(anchor.getAttribute('target')).to.equal('_blank');
           });
 
-          it('should adopt correctly to embed', () => {
-            expect(handler.ampdoc).to.equal(ampdoc);
-            expect(handler.rootNode_).to.equal(embed.win.document);
-            expect(handler.isEmbed_).to.be.true;
+          it('should keep the target when specified', () => {
+            anchor.href = 'https://www.google.com/some-other-path';
+            anchor.setAttribute('target', '_top');
+            handler.handle_(event);
+            expect(event.defaultPrevented).to.be.false;
+            expect(winOpenStub).to.not.be.called;
+            expect(scrollIntoViewStub).to.not.be.called;
+            expect(anchor.getAttribute('target')).to.equal('_top');
           });
 
-          describe('when linking to a different origin or path', () => {
-            it('should update target to _blank', () => {
-              anchor.href = 'https://www.google.com/some-other-path';
-              handler.handle_(event);
-              expect(event.defaultPrevented).to.be.false;
-              expect(winOpenStub).to.not.be.called;
-              expect(scrollIntoViewStub).to.not.be.called;
-              expect(anchor.getAttribute('target')).to.equal('_blank');
-            });
-
-            it('should keep the target when specified', () => {
-              anchor.href = 'https://www.google.com/some-other-path';
-              anchor.setAttribute('target', '_top');
-              handler.handle_(event);
-              expect(event.defaultPrevented).to.be.false;
-              expect(winOpenStub).to.not.be.called;
-              expect(scrollIntoViewStub).to.not.be.called;
-              expect(anchor.getAttribute('target')).to.equal('_top');
-            });
-
-            it('should reset the target when illegal specified', () => {
-              anchor.href = 'https://www.google.com/some-other-path';
-              anchor.setAttribute('target', '_self');
-              handler.handle_(event);
-              expect(event.defaultPrevented).to.be.false;
-              expect(winOpenStub).to.not.be.called;
-              expect(scrollIntoViewStub).to.not.be.called;
-              expect(anchor.getAttribute('target')).to.equal('_blank');
-            });
-          });
-
-          describe('when linking to identifier', () => {
-            beforeEach(() => {
-              anchor.href = 'http://ads.localhost:8000/example#test';
-            });
-
-            it('should NOT do anything, but cancel the event', () => {
-              handler.handle_(event);
-              expect(event.defaultPrevented).to.be.true;
-              expect(replaceStateForTargetStub).to.not.be.called;
-              expect(scrollIntoViewStub).to.not.be.called;
-            });
+          it('should reset the target when illegal specified', () => {
+            anchor.href = 'https://www.google.com/some-other-path';
+            anchor.setAttribute('target', '_self');
+            handler.handle_(event);
+            expect(event.defaultPrevented).to.be.false;
+            expect(winOpenStub).to.not.be.called;
+            expect(scrollIntoViewStub).to.not.be.called;
+            expect(anchor.getAttribute('target')).to.equal('_blank');
           });
         });
+
+        describe('when linking to identifier', () => {
+          beforeEach(() => {
+            anchor.href = 'http://ads.localhost:8000/example#test';
+          });
+
+          it('should NOT do anything, but cancel the event', () => {
+            handler.handle_(event);
+            expect(event.defaultPrevented).to.be.true;
+            expect(replaceStateForTargetStub).to.not.be.called;
+            expect(scrollIntoViewStub).to.not.be.called;
+          });
+        });
+      });
     }
   );
 });

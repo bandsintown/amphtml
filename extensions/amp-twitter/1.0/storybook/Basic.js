@@ -1,31 +1,85 @@
-/**
- * Copyright 2021 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {BentoTwitter} from '#bento/components/bento-twitter/1.0/component';
 
-import * as Preact from '../../../../src/preact';
-import {Twitter} from '../component';
-import {withKnobs} from '@storybook/addon-knobs';
+import * as Preact from '#preact';
 
 export default {
   title: 'Twitter',
-  component: Twitter,
-  decorators: [withKnobs],
+  component: BentoTwitter,
 };
 
-export const _default = () => {
+export const _default = ({showCards, showConversation, ...args}) => {
+  const cards = showCards ? undefined : 'hidden';
+  const conversation = showConversation ? undefined : 'none';
   return (
-    <Twitter style={{width: 300, height: 200}} tweetId="638793490521001985" />
+    <BentoTwitter
+      cards={cards}
+      conversation={conversation}
+      style={{width: '300px', height: '200px'}}
+      {...args}
+    />
   );
+};
+
+_default.argTypes = {
+  tweetId: {
+    name: 'tweetId',
+    defaultValue: '1356304203044499462',
+    options: [
+      '1356304203044499462',
+      '495719809695621121',
+      '463440424141459456',
+    ],
+    control: {type: 'select'},
+  },
+  showCards: {
+    name: 'show cards?',
+    defaultValue: true,
+    control: {type: 'boolean'},
+  },
+  showConversation: {
+    name: 'show conversation?',
+    defaultValue: false,
+    control: {type: 'boolean'},
+  },
+};
+
+export const moments = (args) => {
+  return (
+    <BentoTwitter
+      {...args}
+      momentid="1009149991452135424"
+      style={{width: '300px', height: '200px'}}
+    />
+  );
+};
+
+moments.args = {
+  limit: 2,
+};
+
+export const timelines = (args) => {
+  return <BentoTwitter {...args} style={{width: '300px', height: '200px'}} />;
+};
+
+timelines.args = {
+  tweetLimit: 5,
+  timelineScreenName: 'amphtml',
+  timelineUserId: '3450662892',
+};
+
+timelines.argTypes = {
+  timelineSourceType: {
+    name: 'timelineSourceType',
+    defaultValue: 'profile',
+    options: [
+      'profile',
+      'likes',
+      'list',
+      'source',
+      'collection',
+      'url',
+      'widget',
+    ],
+    control: {type: 'select'},
+  },
 };

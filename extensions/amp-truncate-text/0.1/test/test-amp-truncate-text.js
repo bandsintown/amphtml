@@ -1,23 +1,10 @@
-/**
- * Copyright 2019 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import '../amp-truncate-text';
-import {setStyles} from '../../../../src/style';
-import {toArray} from '../../../../src/core/types/array';
-import {toggleExperiment} from '../../../../src/experiments';
+import {setStyles} from '#core/dom/style';
+import {toArray} from '#core/types/array';
+
+import {toggleExperiment} from '#experiments';
+
+import {macroTask} from '#testing/helpers';
 
 // Lint complains about a template string due to lines being too long.
 const loremText =
@@ -59,19 +46,9 @@ describes.realWin(
         }
       });
 
-      /**
-       * @return {!Promise} A Promise that resolves after the MutationObserver has
-       *    run and we have re-truncateed.
-       */
-      function afterMutationAndClamp() {
-        return new Promise((resolve) => {
-          setTimeout(resolve);
-        });
-      }
-
       async function createElement(
         content,
-        {width, height, layout = 'fixed', container = doc.body}
+        {container = doc.body, height, layout = 'fixed', width}
       ) {
         const element = win.document.createElement('amp-truncate-text');
         element.setAttribute('layout', layout);
@@ -85,7 +62,7 @@ describes.realWin(
         container.appendChild(element);
         await element.buildInternal();
         await element.layoutCallback();
-        await afterMutationAndClamp();
+        await macroTask();
 
         return element;
       }
@@ -350,7 +327,7 @@ describes.realWin(
               height: '600px',
             });
             element.layoutCallback();
-            await afterMutationAndClamp();
+            await macroTask();
 
             expect(button.offsetHeight).to.equal(0);
             expect(button.offsetWidth).to.equal(0);
@@ -393,7 +370,7 @@ describes.realWin(
             const collapseEl = element.querySelector('[slot="expanded"]');
 
             expandEl.click();
-            await afterMutationAndClamp();
+            await macroTask();
 
             expect(element.scrollHeight).to.be.gt(26);
             expect(element.scrollHeight).to.equal(element.offsetHeight);
@@ -425,7 +402,7 @@ describes.realWin(
             });
 
             expandEl.click();
-            await afterMutationAndClamp();
+            await macroTask();
 
             expect(sizer.getBoundingClientRect()).to.include({
               width: 0,
@@ -451,9 +428,9 @@ describes.realWin(
             const collapseEl = element.querySelector('[slot="expanded"]');
 
             expandEl.click();
-            await afterMutationAndClamp();
+            await macroTask();
             collapseEl.click();
-            await afterMutationAndClamp();
+            await macroTask();
 
             expect(element.offsetHeight).to.equal(26);
             expect(element.scrollHeight).to.equal(26);
@@ -513,7 +490,7 @@ describes.realWin(
             const expandSpan = element.querySelector('[slot="collapsed"] span');
 
             expandSpan.click();
-            await afterMutationAndClamp();
+            await macroTask();
 
             expect(element.offsetHeight).to.equal(26);
           });
@@ -536,7 +513,7 @@ describes.realWin(
             const expandSpan = element.querySelector('[slot="collapsed"]');
 
             expandSpan.click();
-            await afterMutationAndClamp();
+            await macroTask();
 
             expect(element.offsetHeight).to.equal(26);
           });
@@ -556,7 +533,7 @@ describes.realWin(
             const expandSpan = element.querySelector('[slot="collapsed"]');
 
             expandSpan.click();
-            await afterMutationAndClamp();
+            await macroTask();
 
             expect(element.offsetHeight).to.equal(26);
           });
@@ -576,7 +553,7 @@ describes.realWin(
             const expandSpan = element.querySelector('[slot="collapsed"] span');
 
             expandSpan.click();
-            await afterMutationAndClamp();
+            await macroTask();
 
             expect(element.offsetHeight).to.equal(26);
           });
@@ -596,7 +573,7 @@ describes.realWin(
             const expandSpan = element.querySelector('[slot="collapsed"] span');
 
             expandSpan.click();
-            await afterMutationAndClamp();
+            await macroTask();
 
             expect(element.offsetHeight).to.equal(26);
           });
@@ -620,7 +597,7 @@ describes.realWin(
             const expandSpan = element.querySelector('[slot="collapsed"]');
 
             expandSpan.click();
-            await afterMutationAndClamp();
+            await macroTask();
 
             expect(element.offsetHeight).to.equal(26);
           });

@@ -1,31 +1,18 @@
-/**
- * Copyright 2015 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import * as fakeTimers from '@sinonjs/fake-timers';
-import {AmpDocSingle} from '../../src/service/ampdoc-impl';
-import {LayoutPriority} from '../../src/layout';
-import {Resource, ResourceState} from '../../src/service/resource';
-import {ResourcesImpl} from '../../src/service/resources-impl';
-import {Services} from '../../src/services';
-import {Signals} from '../../src/core/data-structures/signals';
-import {VisibilityState} from '../../src/core/constants/visibility-state';
-import {layoutRectLtwh} from '../../src/layout-rect';
-import {loadPromise} from '../../src/event-helper';
 
-/*eslint "google-camelcase/google-camelcase": 0*/
+import {VisibilityState_Enum} from '#core/constants/visibility-state';
+import {Signals} from '#core/data-structures/signals';
+import {LayoutPriority_Enum} from '#core/dom/layout';
+import {layoutRectLtwh} from '#core/dom/layout/rect';
+
+import {Services} from '#service';
+import {AmpDocSingle} from '#service/ampdoc-impl';
+import {Resource, ResourceState_Enum} from '#service/resource';
+import {ResourcesImpl} from '#service/resources-impl';
+
+import {loadPromise} from '#utils/event-helper';
+
+/*eslint "local/camelcase": 0*/
 describes.realWin('Resources', {amp: true}, (env) => {
   let window, document;
   let clock;
@@ -48,35 +35,37 @@ describes.realWin('Resources', {amp: true}, (env) => {
   function createResource(opts) {
     const {
       id,
-      isBuilt,
+      idleRenderOutsideViewport,
       isBuilding,
-      state,
+      isBuilt,
       isDisplayed,
       isFixed,
       isInViewport,
-      prerenderAllowed,
-      renderOutsideViewport,
-      idleRenderOutsideViewport,
       layoutPriority,
+      prerenderAllowed,
+      previewAllowed,
+      renderOutsideViewport,
+      state,
       taskId,
     } = {
       id: '1',
       isBuilt: false,
       isBuilding: false,
-      state: ResourceState.NOT_BUILT,
+      state: ResourceState_Enum.NOT_BUILT,
       isDisplayed: true,
       isFixed: false,
       isInViewport: true,
       prerenderAllowed: false,
+      previewAllowed: false,
       renderOutsideViewport: false,
       idleRenderOutsideViewport: false,
-      layoutPriority: LayoutPriority.CONTENT,
+      layoutPriority: LayoutPriority_Enum.CONTENT,
       taskId: 'resource#P',
       ...opts,
     };
 
     const element = document.createElement('amp-el');
-    element.V1 = () => false;
+    element.R1 = () => false;
     element.isBuilt = () => isBuilt;
     element.isBuilding = () => isBuilding;
     element.pause = () => {};
@@ -88,6 +77,7 @@ describes.realWin('Resources', {amp: true}, (env) => {
     env.sandbox.stub(resource, 'isFixed').returns(isFixed);
     env.sandbox.stub(resource, 'isInViewport').returns(isInViewport);
     env.sandbox.stub(resource, 'prerenderAllowed').returns(prerenderAllowed);
+    env.sandbox.stub(resource, 'previewAllowed').returns(previewAllowed);
     env.sandbox
       .stub(resource, 'renderOutsideViewport')
       .returns(renderOutsideViewport);
@@ -326,44 +316,60 @@ describes.realWin('Resources', {amp: true}, (env) => {
       ' document is in prerender',
     () => {
       const resource = createResource({
-        state: ResourceState.READY_FOR_LAYOUT,
+        state: ResourceState_Enum.READY_FOR_LAYOUT,
       });
       resources.visible_ = false;
       env.sandbox
         .stub(resources.ampdoc, 'getVisibilityState')
-        .returns(VisibilityState.PRERENDER);
+        .returns(VisibilityState_Enum.PRERENDER);
       resources.scheduleLayoutOrPreload(resource, true);
       expect(resources.queue_.getSize()).to.equal(0);
     }
   );
 
-  it('should schedule prerenderable resource when document is in prerender', () => {
+  it(
+    'should not schedule non-previewable resource when' +
+      ' document is in preview',
+    () => {
+      const resource = createResource({
+        state: ResourceState_Enum.READY_FOR_LAYOUT,
+      });
+      resources.visible_ = false;
+      env.sandbox
+        .stub(resources.ampdoc, 'getVisibilityState')
+        .returns(VisibilityState_Enum.PREVIEW);
+      resources.scheduleLayoutOrPreload(resource, true);
+      expect(resources.queue_.getSize()).to.equal(0);
+    }
+  );
+
+  it('should schedule previewable resource when document is in preview', () => {
     const resource = createResource({
-      state: ResourceState.READY_FOR_LAYOUT,
-      prerenderAllowed: true,
+      state: ResourceState_Enum.READY_FOR_LAYOUT,
+      previewAllowed: true,
       renderOutsideViewport: true,
-      layoutPriority: LayoutPriority.METADATA,
+      layoutPriority: LayoutPriority_Enum.METADATA,
     });
     resources.visible_ = false;
     env.sandbox
       .stub(resources.ampdoc, 'getVisibilityState')
-      .returns(VisibilityState.PRERENDER);
+      .returns(VisibilityState_Enum.PREVIEW);
     resources.scheduleLayoutOrPreload(resource, true);
     expect(resources.queue_.getSize()).to.equal(1);
     expect(resources.queue_.tasks_[0].forceOutsideViewport).to.be.false;
   });
 
-  it('should not schedule prerenderable resource when document is hidden', () => {
+  it('should not schedule previewable resource when document is hidden', () => {
     const resource = createResource({
-      state: ResourceState.READY_FOR_LAYOUT,
-      prerenderAllowed: true,
+      state: ResourceState_Enum.READY_FOR_LAYOUT,
+      previewAllowed: true,
       renderOutsideViewport: true,
-      layoutPriority: LayoutPriority.METADATA,
+      layoutPriority: LayoutPriority_Enum.METADATA,
     });
     resources.visible_ = false;
     env.sandbox
       .stub(resources.ampdoc, 'getVisibilityState')
-      .returns(VisibilityState.HIDDEN);
+      .returns(VisibilityState_Enum.HIDDEN);
     resources.scheduleLayoutOrPreload(resource, true);
     expect(resources.queue_.getSize()).to.equal(0);
   });
@@ -373,7 +379,7 @@ describes.realWin('Resources', {amp: true}, (env) => {
       ' resource is not visible',
     () => {
       const resource = createResource({
-        state: ResourceState.READY_FOR_LAYOUT,
+        state: ResourceState_Enum.READY_FOR_LAYOUT,
         isInViewport: false,
         prerenderAllowed: true,
       });
@@ -387,10 +393,10 @@ describes.realWin('Resources', {amp: true}, (env) => {
       ' resource is not visible',
     () => {
       const resource = createResource({
-        state: ResourceState.READY_FOR_LAYOUT,
+        state: ResourceState_Enum.READY_FOR_LAYOUT,
         isInViewport: false,
         prerenderAllowed: true,
-        layoutPriority: LayoutPriority.METADATA,
+        layoutPriority: LayoutPriority_Enum.METADATA,
         taskId: 'resource#L',
       });
       resources.scheduleLayoutOrPreload(
@@ -409,10 +415,10 @@ describes.realWin('Resources', {amp: true}, (env) => {
       ' resource is not visible',
     () => {
       const resource = createResource({
-        state: ResourceState.READY_FOR_LAYOUT,
+        state: ResourceState_Enum.READY_FOR_LAYOUT,
         prerenderAllowed: true,
         renderOutsideViewport: true,
-        layoutPriority: LayoutPriority.METADATA,
+        layoutPriority: LayoutPriority_Enum.METADATA,
         taskId: 'resource#L',
       });
       resources.scheduleLayoutOrPreload(resource, true);
@@ -426,11 +432,11 @@ describes.realWin('Resources', {amp: true}, (env) => {
       ' resource is not visible',
     () => {
       const resource = createResource({
-        state: ResourceState.READY_FOR_LAYOUT,
+        state: ResourceState_Enum.READY_FOR_LAYOUT,
         isInViewport: false,
         prerenderAllowed: true,
         idleRenderOutsideViewport: true,
-        layoutPriority: LayoutPriority.METADATA,
+        layoutPriority: LayoutPriority_Enum.METADATA,
         taskId: 'resource#L',
       });
       resources.scheduleLayoutOrPreload(resource, true);
@@ -442,13 +448,13 @@ describes.realWin('Resources', {amp: true}, (env) => {
   it('should update priority and schedule pass', () => {
     const element = document.createElement('div');
     element.isBuilt = () => true;
-    element.getLayoutPriority = () => LayoutPriority.ADS;
+    element.getLayoutPriority = () => LayoutPriority_Enum.ADS;
     const resource = new Resource(1, element, resources);
     resources.pass_.cancel();
-    expect(resource.getLayoutPriority()).to.equal(LayoutPriority.ADS);
+    expect(resource.getLayoutPriority()).to.equal(LayoutPriority_Enum.ADS);
 
-    resources.updateLayoutPriority(element, LayoutPriority.METADATA);
-    expect(resource.getLayoutPriority()).to.equal(LayoutPriority.METADATA);
+    resources.updateLayoutPriority(element, LayoutPriority_Enum.METADATA);
+    expect(resource.getLayoutPriority()).to.equal(LayoutPriority_Enum.METADATA);
     expect(resources.pass_.isPending()).to.be.true;
   });
 
@@ -458,27 +464,27 @@ describes.realWin('Resources', {amp: true}, (env) => {
     // Target element.
     const element = document.createElement('div');
     element.isBuilt = () => true;
-    element.getLayoutPriority = () => LayoutPriority.ADS;
+    element.getLayoutPriority = () => LayoutPriority_Enum.ADS;
     const resource = new Resource(1, element, resources);
     resources.schedule_(resource, 'L', 0, 0, () => {});
     const task = resources.queue_.tasks_[0];
-    expect(task.priority).to.equal(LayoutPriority.ADS);
+    expect(task.priority).to.equal(LayoutPriority_Enum.ADS);
 
     // Another element.
     const element2 = document.createElement('div');
     element2.isBuilt = () => true;
-    element2.getLayoutPriority = () => LayoutPriority.ADS;
+    element2.getLayoutPriority = () => LayoutPriority_Enum.ADS;
     const resource2 = new Resource(2, element2, resources);
     resources.schedule_(resource2, 'L', 0, 0, () => {});
     const task2 = resources.queue_.tasks_[1];
-    expect(task2.priority).to.equal(LayoutPriority.ADS);
+    expect(task2.priority).to.equal(LayoutPriority_Enum.ADS);
 
-    resources.updateLayoutPriority(element, LayoutPriority.METADATA);
-    expect(resource.getLayoutPriority()).to.equal(LayoutPriority.METADATA);
+    resources.updateLayoutPriority(element, LayoutPriority_Enum.METADATA);
+    expect(resource.getLayoutPriority()).to.equal(LayoutPriority_Enum.METADATA);
     expect(resources.pass_.isPending()).to.be.true;
-    expect(task.priority).to.equal(LayoutPriority.METADATA);
+    expect(task.priority).to.equal(LayoutPriority_Enum.METADATA);
     // The other task is not updated.
-    expect(task2.priority).to.equal(LayoutPriority.ADS);
+    expect(task2.priority).to.equal(LayoutPriority_Enum.ADS);
   });
 });
 
@@ -619,7 +625,7 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
   function createElement(rect) {
     const element = env.win.document.createElement('amp-test');
     element.classList.add('i-amphtml-element');
-    element.V1 = () => false;
+    element.R1 = () => false;
     element.signals = () => new Signals();
     element.whenBuilt = () => Promise.resolve();
     element.isBuilt = () => true;
@@ -627,7 +633,7 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
     element.isUpgraded = () => true;
     element.updateLayoutBox = () => {};
     element.getPlaceholder = () => null;
-    element.getLayoutPriority = () => LayoutPriority.CONTENT;
+    element.getLayoutPriority = () => LayoutPriority_Enum.CONTENT;
     element.getLayout = () => 'fixed';
 
     element.idleRenderOutsideViewport = () => true;
@@ -638,6 +644,7 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
     element.layoutCallback = () => Promise.resolve();
     element.viewportCallback = sandbox.spy();
     element.prerenderAllowed = () => true;
+    element.previewAllowed = () => true;
     element.renderOutsideViewport = () => true;
     element.isRelayoutNeeded = () => true;
     element.pause = () => {};
@@ -656,7 +663,7 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
 
   function createResource(id, rect) {
     const resource = new Resource(id, createElement(rect), resources);
-    resource.state_ = ResourceState.READY_FOR_LAYOUT;
+    resource.state_ = ResourceState_Enum.READY_FOR_LAYOUT;
     resource.layoutBox_ = rect;
     return resource;
   }
@@ -713,7 +720,7 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
     resources.visible_ = true;
     sandbox
       .stub(resources.ampdoc, 'getVisibilityState')
-      .returns(VisibilityState.VISIBLE);
+      .returns(VisibilityState_Enum.VISIBLE);
     viewportMock.expects('getRect').returns(layoutRectLtwh(0, 0, 300, 400));
     resource1.isBuilt = () => false;
     expect(resource1.hasBeenMeasured()).to.be.false;
@@ -728,7 +735,7 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
     resources.visible_ = true;
     sandbox
       .stub(resources.ampdoc, 'getVisibilityState')
-      .returns(VisibilityState.VISIBLE);
+      .returns(VisibilityState_Enum.VISIBLE);
     viewportMock.expects('getRect').returns(layoutRectLtwh(0, 0, 300, 400));
 
     resources.discoverWork_();
@@ -739,12 +746,12 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
   });
 
   it('should NOT rerender anything', () => {
-    resource1.state_ = ResourceState.LAYOUT_COMPLETE;
-    resource2.state_ = ResourceState.LAYOUT_COMPLETE;
+    resource1.state_ = ResourceState_Enum.LAYOUT_COMPLETE;
+    resource2.state_ = ResourceState_Enum.LAYOUT_COMPLETE;
     resources.visible_ = true;
     sandbox
       .stub(resources.ampdoc, 'getVisibilityState')
-      .returns(VisibilityState.VISIBLE);
+      .returns(VisibilityState_Enum.VISIBLE);
     viewportMock.expects('getRect').returns(layoutRectLtwh(0, 0, 300, 400));
 
     resources.discoverWork_();
@@ -753,8 +760,8 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
   });
 
   it('should re-render from requested position', () => {
-    resource1.state_ = ResourceState.LAYOUT_COMPLETE;
-    resource2.state_ = ResourceState.LAYOUT_COMPLETE;
+    resource1.state_ = ResourceState_Enum.LAYOUT_COMPLETE;
+    resource2.state_ = ResourceState_Enum.LAYOUT_COMPLETE;
     resource1.hasBeenMeasured = () => true;
     resource2.hasBeenMeasured = () => true;
     resource1.element.getBoundingClientRect = () =>
@@ -764,7 +771,7 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
     resources.visible_ = true;
     sandbox
       .stub(resources.ampdoc, 'getVisibilityState')
-      .returns(VisibilityState.VISIBLE);
+      .returns(VisibilityState_Enum.VISIBLE);
     resources.relayoutAll_ = false;
     resources.relayoutTop_ = 1000;
     viewportMock.expects('getRect').returns(layoutRectLtwh(0, 0, 300, 400));
@@ -774,15 +781,15 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
     expect(resources.relayoutTop_).to.equal(-1);
     expect(resources.queue_.getSize()).to.equal(1);
     expect(resources.queue_.tasks_[0].resource).to.equal(resource2);
-    expect(resource1.state_).to.equal(ResourceState.LAYOUT_COMPLETE);
-    expect(resource2.state_).to.equal(ResourceState.LAYOUT_SCHEDULED);
+    expect(resource1.state_).to.equal(ResourceState_Enum.LAYOUT_COMPLETE);
+    expect(resource2.state_).to.equal(ResourceState_Enum.LAYOUT_SCHEDULED);
   });
 
   it('should prerender only one screen in visibilityState=prerender', () => {
     resources.visible_ = false;
     sandbox
       .stub(resources.ampdoc, 'getVisibilityState')
-      .returns(VisibilityState.PRERENDER);
+      .returns(VisibilityState_Enum.PRERENDER);
     viewportMock.expects('getRect').returns(layoutRectLtwh(0, 0, 300, 1009));
 
     resources.discoverWork_();
@@ -793,12 +800,12 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
 
   // TODO(dvoytenko, #12476): Make this test work with sinon 4.0.
   it.skip('should remeasure when requested and scheduled unloads', () => {
-    resource1.state_ = ResourceState.LAYOUT_COMPLETE;
-    resource2.state_ = ResourceState.LAYOUT_COMPLETE;
+    resource1.state_ = ResourceState_Enum.LAYOUT_COMPLETE;
+    resource2.state_ = ResourceState_Enum.LAYOUT_COMPLETE;
     resources.visible_ = true;
     sandbox
       .stub(resources.ampdoc, 'getVisibilityState')
-      .returns(VisibilityState.VISIBLE);
+      .returns(VisibilityState_Enum.VISIBLE);
     viewportMock.expects('getRect').returns(layoutRectLtwh(0, 0, 300, 400));
 
     const resource1MeasureStub = sandbox
@@ -839,7 +846,7 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
 
   it('should eject stale tasks when element unloaded', () => {
     const pendingResource = createResource(5, layoutRectLtwh(0, 0, 0, 0));
-    pendingResource.state_ = ResourceState.NOT_BUILT;
+    pendingResource.state_ = ResourceState_Enum.NOT_BUILT;
     resources.pendingBuildResources_ = [pendingResource];
     resources.visible_ = true;
     // Don't resolve layout - immulating DOM being removed and load
@@ -853,7 +860,7 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
 
     sandbox
       .stub(resources.ampdoc, 'getVisibilityState')
-      .returns(VisibilityState.VISIBLE);
+      .returns(VisibilityState_Enum.VISIBLE);
     viewportMock
       .expects('getRect')
       .returns(layoutRectLtwh(0, 0, 300, 400))
@@ -904,14 +911,14 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
     resources.work_();
     expect(resources.exec_.getSize()).to.equal(1);
     expect(measureSpy).to.be.calledOnce;
-    expect(resource1.getState()).to.equal(ResourceState.LAYOUT_SCHEDULED);
+    expect(resource1.getState()).to.equal(ResourceState_Enum.LAYOUT_SCHEDULED);
   });
 
   it('should record layout schedule time on the resource element', () => {
     resources.scheduleLayoutOrPreload(resource1, true);
 
     resources.work_();
-    expect(resource1.getState()).to.equal(ResourceState.LAYOUT_SCHEDULED);
+    expect(resource1.getState()).to.equal(ResourceState_Enum.LAYOUT_SCHEDULED);
     expect(resource1.element.layoutScheduleTime).to.be.greaterThan(0);
   });
 
@@ -929,7 +936,7 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
     expect(resources.exec_.getSize()).to.equal(0);
     expect(measureSpy).to.be.calledOnce;
     expect(layoutCanceledSpy).to.be.calledOnce;
-    expect(resource1.getState()).to.equal(ResourceState.READY_FOR_LAYOUT);
+    expect(resource1.getState()).to.equal(ResourceState_Enum.READY_FOR_LAYOUT);
   });
 
   it('should force schedule resource execution outside viewport', () => {
@@ -949,7 +956,7 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
     resources.work_();
     expect(resources.exec_.getSize()).to.equal(1);
     expect(measureSpy).to.be.calledOnce;
-    expect(resource1.getState()).to.equal(ResourceState.LAYOUT_SCHEDULED);
+    expect(resource1.getState()).to.equal(ResourceState_Enum.LAYOUT_SCHEDULED);
   });
 
   it('should schedule resource prerender when doc in prerender mode', () => {
@@ -968,7 +975,7 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
     expect(resources.exec_.getSize()).to.equal(1);
     expect(measureSpy).to.be.calledOnce;
     expect(layoutCanceledSpy).to.not.be.called;
-    expect(resource1.getState()).to.equal(ResourceState.LAYOUT_SCHEDULED);
+    expect(resource1.getState()).to.equal(ResourceState_Enum.LAYOUT_SCHEDULED);
   });
 
   it('should not schedule resource prerender', () => {
@@ -987,7 +994,45 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
     expect(resources.exec_.getSize()).to.equal(0);
     expect(measureSpy).to.be.calledOnce;
     expect(layoutCanceledSpy).to.be.calledOnce;
-    expect(resource1.getState()).to.equal(ResourceState.READY_FOR_LAYOUT);
+    expect(resource1.getState()).to.equal(ResourceState_Enum.READY_FOR_LAYOUT);
+  });
+
+  it('should schedule resource preview when doc in preview mode', () => {
+    resources.scheduleLayoutOrPreload(resource1, true);
+    expect(resources.queue_.getSize()).to.equal(1);
+    expect(resources.queue_.tasks_[0].resource).to.equal(resource1);
+
+    resources.visible_ = false;
+    sandbox.stub(resources.ampdoc, 'getVisibilityState').returns('preview');
+    sandbox.stub(resource1, 'isInViewport').returns(true);
+    sandbox.stub(resource1, 'previewAllowed').returns(true);
+
+    const measureSpy = sandbox.spy(resource1, 'measure');
+    const layoutCanceledSpy = sandbox.spy(resource1, 'layoutCanceled');
+    resources.work_();
+    expect(resources.exec_.getSize()).to.equal(1);
+    expect(measureSpy).to.be.calledOnce;
+    expect(layoutCanceledSpy).to.not.be.called;
+    expect(resource1.getState()).to.equal(ResourceState_Enum.LAYOUT_SCHEDULED);
+  });
+
+  it('should not schedule resource preview', () => {
+    resources.scheduleLayoutOrPreload(resource1, true);
+    expect(resources.queue_.getSize()).to.equal(1);
+    expect(resources.queue_.tasks_[0].resource).to.equal(resource1);
+
+    resources.visible_ = false;
+    sandbox.stub(resources.ampdoc, 'getVisibilityState').returns('preview');
+    sandbox.stub(resource1, 'isInViewport').returns(true);
+    sandbox.stub(resource1, 'previewAllowed').returns(false);
+
+    const measureSpy = sandbox.spy(resource1, 'measure');
+    const layoutCanceledSpy = sandbox.spy(resource1, 'layoutCanceled');
+    resources.work_();
+    expect(resources.exec_.getSize()).to.equal(0);
+    expect(measureSpy).to.be.calledOnce;
+    expect(layoutCanceledSpy).to.be.calledOnce;
+    expect(resource1.getState()).to.equal(ResourceState_Enum.READY_FOR_LAYOUT);
   });
 
   it('should schedule resource execution when doc is hidden', () => {
@@ -1008,14 +1053,11 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
     expect(layoutCanceledSpy).to.be.calledOnce;
   });
 
-  // TODO (#16156): this test results in too many calls to getRect on Safari
-  // TODO(jridgewell, #21546): fix this flaky test. Originally configured with:
-  // it.configure().skipSafari().run(
-  it.skip('should update inViewport before scheduling layouts', () => {
+  it('should update inViewport before scheduling layouts', () => {
     resources.visible_ = true;
     sandbox
       .stub(resources.ampdoc, 'getVisibilityState')
-      .returns(VisibilityState.VISIBLE);
+      .returns(VisibilityState_Enum.VISIBLE);
     viewportMock.expects('getRect').returns(layoutRectLtwh(0, 0, 300, 400));
     const setInViewport = sandbox.spy(resource1, 'setInViewport');
     const schedule = sandbox.spy(resources, 'scheduleLayoutOrPreload');
@@ -1037,7 +1079,7 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
       .onSecondCall()
       .returns(false);
     resource2.element.idleRenderOutsideViewport = () => false;
-    resource1.state_ = ResourceState.NOT_BUILT;
+    resource1.state_ = ResourceState_Enum.NOT_BUILT;
     resource1.build = sandbox.spy();
 
     resources.discoverWork_();
@@ -1061,7 +1103,7 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
       .onSecondCall()
       .returns(true);
     resource2.element.idleRenderOutsideViewport = () => false;
-    resource1.state_ = ResourceState.NOT_BUILT;
+    resource1.state_ = ResourceState_Enum.NOT_BUILT;
     resource1.build = sandbox.spy();
 
     resources.discoverWork_();
@@ -1073,13 +1115,31 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
   it('should NOT build non-prerenderable resources in prerender', () => {
     sandbox
       .stub(resources.ampdoc, 'getVisibilityState')
-      .returns(VisibilityState.PRERENDER);
+      .returns(VisibilityState_Enum.PRERENDER);
     sandbox.stub(resources, 'schedule_');
     resources.documentReady_ = true;
 
     resource1.element.isBuilt = () => false;
     resource1.prerenderAllowed = () => false;
-    resource1.state_ = ResourceState.NOT_BUILT;
+    resource1.state_ = ResourceState_Enum.NOT_BUILT;
+    resource1.build = sandbox.spy();
+    resource2.element.idleRenderOutsideViewport = () => false;
+
+    resources.discoverWork_();
+
+    expect(resource1.build).to.not.be.called;
+  });
+
+  it('should NOT build non-previewable resources in preview', () => {
+    sandbox
+      .stub(resources.ampdoc, 'getVisibilityState')
+      .returns(VisibilityState_Enum.PREVIEW);
+    sandbox.stub(resources, 'schedule_');
+    resources.documentReady_ = true;
+
+    resource1.element.isBuilt = () => false;
+    resource1.previewAllowed = () => false;
+    resource1.state_ = ResourceState_Enum.NOT_BUILT;
     resource1.build = sandbox.spy();
     resource2.element.idleRenderOutsideViewport = () => false;
 
@@ -1098,7 +1158,7 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
     resource1.element.idleRenderOutsideViewport = () => true;
     resource1.prerenderAllowed = () => true;
     resource1.isBuildRenderBlocking = () => false;
-    resource1.state_ = ResourceState.NOT_BUILT;
+    resource1.state_ = ResourceState_Enum.NOT_BUILT;
     resource1.build = sandbox.spy();
 
     resources.buildOrScheduleBuildForResource_(resource1);
@@ -1115,7 +1175,7 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
     resource1.element.idleRenderOutsideViewport = () => true;
     resource1.prerenderAllowed = () => true;
     resource1.isBuildRenderBlocking = () => true;
-    resource1.state_ = ResourceState.NOT_BUILT;
+    resource1.state_ = ResourceState_Enum.NOT_BUILT;
     resource1.build = sandbox.spy();
 
     resources.buildOrScheduleBuildForResource_(resource1);
@@ -1131,7 +1191,7 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
     resource1.element.idleRenderOutsideViewport = () => true;
     resource2.element.renderOutsideViewport = () => false;
     resource2.element.idleRenderOutsideViewport = () => false;
-    resource1.state_ = ResourceState.READY_FOR_LAYOUT;
+    resource1.state_ = ResourceState_Enum.READY_FOR_LAYOUT;
 
     resources.discoverWork_();
 
@@ -1145,7 +1205,7 @@ describes.realWin('Resources discoverWork', {amp: true}, (env) => {
     // Emulates a resource not building.
     resource1.element.isBuilt = sandbox.stub().returns(false);
     resource2.element.idleRenderOutsideViewport = () => false;
-    resource1.state_ = ResourceState.NOT_BUILT;
+    resource1.state_ = ResourceState_Enum.NOT_BUILT;
     resource1.build = sandbox.spy();
 
     resources.discoverWork_();
@@ -1324,7 +1384,7 @@ describes.fakeWin('Resources.add/upgrade/remove', {amp: true}, (env) => {
   function createElementWithResource(id) {
     const element = createElement();
     const resource = new Resource(id, element, resources);
-    resource.state_ = ResourceState.NOT_BUILT;
+    resource.state_ = ResourceState_Enum.NOT_BUILT;
     resource.element['__AMP__RESOURCE'] = resource;
     return [element, resource];
   }
@@ -1385,61 +1445,53 @@ describes.fakeWin('Resources.add/upgrade/remove', {amp: true}, (env) => {
     });
   });
 
-  // TODO(jridgewell, #15748): Fails on Safari 11.1.0.
-  it.configure().skipSafari(
-    'should not schedule pass when immediate build fails',
-    () => {
-      const schedulePassStub = sandbox.stub(resources, 'schedulePass');
-      child1.isBuilt = () => false;
-      const child1BuildSpy = sandbox.spy();
-      child1.buildInternal = () => {
-        // Emulate an error happening during an element build.
-        child1BuildSpy();
-        return Promise.reject(new Error('child1-build-error'));
-      };
-      resources.documentReady_ = true;
-      resources.add(child1);
-      const resource1 = stubBuild(Resource.forElementOptional(child1));
-      resources.upgraded(child1);
-      expect(resources.get()).to.contain(resource1);
-      return resource1.buildPromise.then(
-        () => {
-          throw new Error('must have failed');
-        },
-        () => {
-          expect(child1BuildSpy).to.be.calledOnce;
-          expect(schedulePassStub).to.not.be.called;
-          expect(resources.get()).to.not.contain(resource1);
-        }
-      );
-    }
-  );
+  it('should not schedule pass when immediate build fails', () => {
+    const schedulePassStub = sandbox.stub(resources, 'schedulePass');
+    child1.isBuilt = () => false;
+    const child1BuildSpy = sandbox.spy();
+    child1.buildInternal = () => {
+      // Emulate an error happening during an element build.
+      child1BuildSpy();
+      return Promise.reject(new Error('child1-build-error'));
+    };
+    resources.documentReady_ = true;
+    resources.add(child1);
+    const resource1 = stubBuild(Resource.forElementOptional(child1));
+    resources.upgraded(child1);
+    expect(resources.get()).to.contain(resource1);
+    return resource1.buildPromise.then(
+      () => {
+        throw new Error('must have failed');
+      },
+      () => {
+        expect(child1BuildSpy).to.be.calledOnce;
+        expect(schedulePassStub).to.not.be.called;
+        expect(resources.get()).to.not.contain(resource1);
+      }
+    );
+  });
 
-  // TODO(amphtml, #15748): Fails on Safari 11.1.0.
-  it.configure().skipSafari(
-    'should add element to pending build when document is not ready',
-    () => {
-      child1.isBuilt = () => false;
-      child2.isBuilt = () => false;
-      resources.buildReadyResources_ = sandbox.spy();
-      resources.documentReady_ = false;
-      resources.add(child1);
-      resources.upgraded(child1);
-      expect(child1.buildInternal.called).to.be.false;
-      expect(resources.pendingBuildResources_.length).to.be.equal(1);
-      resources.add(child2);
-      resources.upgraded(child2);
-      expect(child2.buildInternal.called).to.be.false;
-      expect(resources.pendingBuildResources_.length).to.be.equal(2);
-      expect(resources.buildReadyResources_.calledTwice).to.be.true;
-      const resource1 = Resource.forElementOptional(child1);
-      const resource2 = Resource.forElementOptional(child2);
-      expect(resources.get()).to.contain(resource1);
-      expect(resources.get()).to.contain(resource2);
-      expect(resource1.isBuilding()).to.be.false;
-      expect(resource2.isBuilding()).to.be.false;
-    }
-  );
+  it('should add element to pending build when document is not ready', () => {
+    child1.isBuilt = () => false;
+    child2.isBuilt = () => false;
+    resources.buildReadyResources_ = sandbox.spy();
+    resources.documentReady_ = false;
+    resources.add(child1);
+    resources.upgraded(child1);
+    expect(child1.buildInternal.called).to.be.false;
+    expect(resources.pendingBuildResources_.length).to.be.equal(1);
+    resources.add(child2);
+    resources.upgraded(child2);
+    expect(child2.buildInternal.called).to.be.false;
+    expect(resources.pendingBuildResources_.length).to.be.equal(2);
+    expect(resources.buildReadyResources_.calledTwice).to.be.true;
+    const resource1 = Resource.forElementOptional(child1);
+    const resource2 = Resource.forElementOptional(child2);
+    expect(resources.get()).to.contain(resource1);
+    expect(resources.get()).to.contain(resource2);
+    expect(resource1.isBuilding()).to.be.false;
+    expect(resource2.isBuilding()).to.be.false;
+  });
 
   describe('buildReadyResources_', () => {
     let schedulePassStub;
@@ -1454,47 +1506,43 @@ describes.fakeWin('Resources.add/upgrade/remove', {amp: true}, (env) => {
       resources.resources_ = [resource1, resource2];
     });
 
-    // TODO(amphtml, #15748): Fails on Safari 11.1.0.
-    it.configure().skipSafari(
-      'should build ready resources and remove them from pending',
-      () => {
-        resources.pendingBuildResources_ = [resource1, resource2];
-        resources.buildReadyResources_();
-        expect(child1.buildInternal.called).to.be.false;
-        expect(child2.buildInternal.called).to.be.false;
-        expect(resources.pendingBuildResources_.length).to.be.equal(2);
-        expect(resources.schedulePass.called).to.be.false;
+    it('should build ready resources and remove them from pending', () => {
+      resources.pendingBuildResources_ = [resource1, resource2];
+      resources.buildReadyResources_();
+      expect(child1.buildInternal.called).to.be.false;
+      expect(child2.buildInternal.called).to.be.false;
+      expect(resources.pendingBuildResources_.length).to.be.equal(2);
+      expect(resources.schedulePass.called).to.be.false;
 
-        child1.nextSibling = child2;
-        resources.buildReadyResources_();
-        expect(child1.buildInternal.called).to.be.true;
-        expect(child2.buildInternal.called).to.be.false;
-        expect(resources.pendingBuildResources_.length).to.be.equal(1);
-        expect(resources.pendingBuildResources_[0]).to.be.equal(resource2);
-        expect(resource1.isBuilding()).to.be.true;
-        expect(resource2.isBuilding()).to.be.false;
-        return resource1.buildPromise
-          .then(() => {
-            expect(resources.schedulePass.calledOnce).to.be.true;
+      child1.nextSibling = child2;
+      resources.buildReadyResources_();
+      expect(child1.buildInternal.called).to.be.true;
+      expect(child2.buildInternal.called).to.be.false;
+      expect(resources.pendingBuildResources_.length).to.be.equal(1);
+      expect(resources.pendingBuildResources_[0]).to.be.equal(resource2);
+      expect(resource1.isBuilding()).to.be.true;
+      expect(resource2.isBuilding()).to.be.false;
+      return resource1.buildPromise
+        .then(() => {
+          expect(resources.schedulePass.calledOnce).to.be.true;
 
-            child2.parentNode = parent;
-            parent.nextSibling = true;
-            resources.buildReadyResources_();
-            expect(child1.buildInternal).to.be.calledOnce;
-            expect(child2.buildInternal.called).to.be.true;
-            expect(resources.pendingBuildResources_.length).to.be.equal(0);
-            expect(resource2.isBuilding()).to.be.true;
-            return resource2.buildPromise;
-          })
-          .then(() => {
-            expect(resources.get()).to.contain(resource1);
-            expect(resources.get()).to.contain(resource2);
-            expect(resource1.isBuilding()).to.be.false;
-            expect(resource2.isBuilding()).to.be.false;
-            expect(resources.schedulePass.calledTwice).to.be.true;
-          });
-      }
-    );
+          child2.parentNode = parent;
+          parent.nextSibling = true;
+          resources.buildReadyResources_();
+          expect(child1.buildInternal).to.be.calledOnce;
+          expect(child2.buildInternal.called).to.be.true;
+          expect(resources.pendingBuildResources_.length).to.be.equal(0);
+          expect(resource2.isBuilding()).to.be.true;
+          return resource2.buildPromise;
+        })
+        .then(() => {
+          expect(resources.get()).to.contain(resource1);
+          expect(resources.get()).to.contain(resource2);
+          expect(resource1.isBuilding()).to.be.false;
+          expect(resource2.isBuilding()).to.be.false;
+          expect(resources.schedulePass.calledTwice).to.be.true;
+        });
+    });
 
     it('should NOT build past the root node when pending', () => {
       resources.pendingBuildResources_ = [resource1];
@@ -1549,82 +1597,69 @@ describes.fakeWin('Resources.add/upgrade/remove', {amp: true}, (env) => {
       expect(resources.pendingBuildResources_.length).to.be.equal(0);
     });
 
-    // TODO(amphtml, #15748): Fails on Safari 11.1.0.
-    it.configure().skipSafari(
-      'should build everything pending when document is ready',
-      () => {
-        resources.documentReady_ = true;
-        resources.pendingBuildResources_ = [
-          parentResource,
-          resource1,
-          resource2,
-        ];
-        const child1BuildSpy = sandbox.spy();
-        child1.buildInternal = () => {
-          // Emulate an error happening during an element build.
-          child1BuildSpy();
-          return Promise.reject(new Error('child1-build-error'));
-        };
-        resources.buildReadyResources_();
-        expect(child1BuildSpy.called).to.be.true;
-        expect(child2.buildInternal.called).to.be.true;
-        expect(parent.buildInternal.called).to.be.true;
-        expect(resources.pendingBuildResources_.length).to.be.equal(0);
-        return Promise.all([
-          parentResource.buildPromise,
-          resource2.buildPromise,
-          resource1.buildPromise.then(
-            () => {
-              throw new Error('must have failed');
-            },
-            () => {
-              // Ignore error.
-            }
-          ),
-        ]).then(() => {
-          expect(schedulePassStub).to.be.calledTwice;
-          // Failed build.
-          expect(resources.get()).to.not.contain(resource1);
-          expect(resource1.isBuilding()).to.be.false;
-          // Successful build.
-          expect(resources.get()).to.contain(resource2);
-          expect(resource2.isBuilding()).to.be.false;
-        });
-      }
-    );
-
-    // TODO(amphtml, #15748): Fails on Safari 11.1.0.
-    it.configure().skipSafari(
-      'should not schedule pass if all builds failed',
-      () => {
-        resources.documentReady_ = true;
-        resources.pendingBuildResources_ = [resource1];
-        const child1BuildSpy = sandbox.spy();
-        child1.buildInternal = () => {
-          // Emulate an error happening during an element build.
-          child1BuildSpy();
-          return Promise.reject(new Error('child1-build-error'));
-        };
-        resources.buildReadyResources_();
-        expect(child1BuildSpy.called).to.be.true;
-        expect(resources.pendingBuildResources_.length).to.be.equal(0);
-        return resource1.buildPromise.then(
+    it('should build everything pending when document is ready', () => {
+      resources.documentReady_ = true;
+      resources.pendingBuildResources_ = [parentResource, resource1, resource2];
+      const child1BuildSpy = sandbox.spy();
+      child1.buildInternal = () => {
+        // Emulate an error happening during an element build.
+        child1BuildSpy();
+        return Promise.reject(new Error('child1-build-error'));
+      };
+      resources.buildReadyResources_();
+      expect(child1BuildSpy.called).to.be.true;
+      expect(child2.buildInternal.called).to.be.true;
+      expect(parent.buildInternal.called).to.be.true;
+      expect(resources.pendingBuildResources_.length).to.be.equal(0);
+      return Promise.all([
+        parentResource.buildPromise,
+        resource2.buildPromise,
+        resource1.buildPromise.then(
           () => {
             throw new Error('must have failed');
           },
           () => {
-            expect(schedulePassStub).to.not.be.called;
-            expect(resources.get()).to.not.contain(resource1);
-            expect(resource1.isBuilding()).to.be.false;
+            // Ignore error.
           }
-        );
-      }
-    );
+        ),
+      ]).then(() => {
+        expect(schedulePassStub).to.be.calledTwice;
+        // Failed build.
+        expect(resources.get()).to.not.contain(resource1);
+        expect(resource1.isBuilding()).to.be.false;
+        // Successful build.
+        expect(resources.get()).to.contain(resource2);
+        expect(resource2.isBuilding()).to.be.false;
+      });
+    });
+
+    it('should not schedule pass if all builds failed', () => {
+      resources.documentReady_ = true;
+      resources.pendingBuildResources_ = [resource1];
+      const child1BuildSpy = sandbox.spy();
+      child1.buildInternal = () => {
+        // Emulate an error happening during an element build.
+        child1BuildSpy();
+        return Promise.reject(new Error('child1-build-error'));
+      };
+      resources.buildReadyResources_();
+      expect(child1BuildSpy.called).to.be.true;
+      expect(resources.pendingBuildResources_.length).to.be.equal(0);
+      return resource1.buildPromise.then(
+        () => {
+          throw new Error('must have failed');
+        },
+        () => {
+          expect(schedulePassStub).to.not.be.called;
+          expect(resources.get()).to.not.contain(resource1);
+          expect(resource1.isBuilding()).to.be.false;
+        }
+      );
+    });
   });
 
   describe('remove', () => {
-    // TODO(amphtml, #15748): Fails on Safari 11.1.0.
-    it.configure().skipSafari('should remove resource and pause', () => {
+    it('should remove resource and pause', () => {
       child1.isBuilt = () => true;
       resources.add(child1);
       const resource = child1['__AMP__RESOURCE'];
@@ -1639,9 +1674,9 @@ describes.fakeWin('Resources.add/upgrade/remove', {amp: true}, (env) => {
 
   it("remove should remove all of a resource's tasks", () => {
     const states = [
-      ResourceState.NOT_LAID_OUT,
-      ResourceState.READY_FOR_LAYOUT,
-      ResourceState.LAYOUT_SCHEDULED,
+      ResourceState_Enum.NOT_LAID_OUT,
+      ResourceState_Enum.READY_FOR_LAYOUT,
+      ResourceState_Enum.LAYOUT_SCHEDULED,
     ];
 
     states.forEach((state) => {
@@ -1673,8 +1708,7 @@ describes.fakeWin('Resources.add/upgrade/remove', {amp: true}, (env) => {
       resources.remove(child1);
     });
 
-    // TODO(amphtml, #15748): Fails on Safari 11.1.0.
-    it.configure().skipSafari('should keep reference to the resource', () => {
+    it('should keep reference to the resource', () => {
       expect(resource).to.not.be.null;
       expect(Resource.forElementOptional(child1)).to.equal(resource);
       expect(resources.get()).to.not.contain(resource);

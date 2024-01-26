@@ -1,20 +1,17 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import * as fakeTimers from '@sinonjs/fake-timers';
+
+import {
+  CONSENT_POLICY_STATE,
+  CONSENT_STRING_TYPE,
+} from '#core/constants/consent-state';
+
+import {macroTask} from '#testing/helpers';
+
+import {
+  registerServiceBuilder,
+  resetServiceForTesting,
+} from '../../../../src/service-helpers';
+import {expandPolicyConfig} from '../consent-config';
 import {
   CONSENT_ITEM_STATE,
   PURPOSE_CONSENT_STATE,
@@ -22,21 +19,9 @@ import {
   constructMetadata,
 } from '../consent-info';
 import {
-  CONSENT_POLICY_STATE,
-  CONSENT_STRING_TYPE,
-} from '../../../../src/core/constants/consent-state';
-import {
   ConsentPolicyInstance,
   ConsentPolicyManager,
 } from '../consent-policy-manager';
-import {dict} from '../../../../src/core/types/object';
-import {expandPolicyConfig} from '../consent-config';
-import {macroTask} from '../../../../testing/yield';
-
-import {
-  registerServiceBuilder,
-  resetServiceForTesting,
-} from '../../../../src/service';
 
 describes.realWin(
   'ConsentPolicyManager',
@@ -70,11 +55,9 @@ describes.realWin(
             return Promise.resolve();
           },
           getConsentInstanceSharedData: () => {
-            return Promise.resolve(
-              dict({
-                'shared': 'test',
-              })
-            );
+            return Promise.resolve({
+              'shared': 'test',
+            });
           },
         });
       });
@@ -227,7 +210,7 @@ describes.realWin(
           manager = new ConsentPolicyManager(ampdoc);
           consentInfo = constructConsentInfo(CONSENT_ITEM_STATE.UNKNOWN);
           manager.setLegacyConsentInstanceId('ABC');
-          policy = expandPolicyConfig(dict({}), 'ABC');
+          policy = expandPolicyConfig({}, 'ABC');
           const keys = Object.keys(policy);
           for (let i = 0; i < keys.length; i++) {
             manager.registerConsentPolicyInstance(keys[i], policy[keys[i]]);
@@ -422,7 +405,7 @@ describes.realWin(
           manager = new ConsentPolicyManager(ampdoc);
           consentInfo = constructConsentInfo(CONSENT_ITEM_STATE.UNKNOWN);
           manager.setLegacyConsentInstanceId('ABC');
-          policy = expandPolicyConfig(dict({}), 'ABC');
+          policy = expandPolicyConfig({}, 'ABC');
           const keys = Object.keys(policy);
           for (let i = 0; i < keys.length; i++) {
             manager.registerConsentPolicyInstance(keys[i], policy[keys[i]]);
@@ -437,7 +420,7 @@ describes.realWin(
         });
 
         it('will fire only fire for a valid change', () => {
-          const spy = window.sandbox.spy();
+          const spy = env.sandbox.spy();
           manager.setOnPolicyChange(spy);
           expect(manager.tcfConsentChangeHandler_).to.not.be.null;
 
@@ -454,7 +437,7 @@ describes.realWin(
         });
 
         it('will fire on multiple changes', () => {
-          const spy = window.sandbox.spy();
+          const spy = env.sandbox.spy();
           manager.setOnPolicyChange(spy);
           expect(manager.tcfConsentChangeHandler_).to.not.be.null;
 
@@ -653,6 +636,40 @@ describes.realWin(
         ).to.eventually.deep.equal({
           'shared': 'test',
         });
+      });
+    });
+
+    describe('getTcfPolicyVersion', () => {
+      let manager;
+
+      beforeEach(() => {
+        manager = new ConsentPolicyManager(ampdoc);
+        manager.setLegacyConsentInstanceId('ABC');
+        env.sandbox
+          .stub(ConsentPolicyInstance.prototype, 'getReadyPromise')
+          .callsFake(() => {
+            return Promise.resolve();
+          });
+        consentInfo = constructConsentInfo(
+          CONSENT_ITEM_STATE.ACCEPTED,
+          'test',
+          undefined,
+          undefined,
+          undefined,
+          4
+        );
+      });
+
+      it('should return tcf policy version value from state manager', async () => {
+        manager.registerConsentPolicyInstance('default', {
+          'waitFor': {
+            'ABC': undefined,
+          },
+        });
+        await macroTask();
+        await expect(
+          manager.getTcfPolicyVersion('default')
+        ).to.eventually.be.equal(4);
       });
     });
 

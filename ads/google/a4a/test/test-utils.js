@@ -1,22 +1,8 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import * as fakeTimers from '@sinonjs/fake-timers';
 
 import '../../../../extensions/amp-ad/0.1/amp-ad-ui';
 import '../../../../extensions/amp-ad/0.1/amp-ad-xorigin-iframe-handler';
-import * as IniLoad from '../../../../src/ini-load';
+import {buildUrl} from '#ads/google/a4a/shared/url-builder';
 import {
   AMP_EXPERIMENT_ATTRIBUTE,
   EXPERIMENT_ATTRIBUTE,
@@ -30,26 +16,28 @@ import {
   getCorrelator,
   getCsiAmpAnalyticsVariables,
   getEnclosingContainerTypes,
-  getIdentityToken,
-  getIdentityTokenRequestUrl,
   getServeNpaPromise,
   googleAdUrl,
   groupAmpAdsByType,
   maybeAppendErrorParameter,
   mergeExperimentIds,
-} from '../utils';
-import {CONSENT_POLICY_STATE} from '../../../../src/core/constants/consent-state';
-import {GEO_IN_GROUP} from '../../../../extensions/amp-geo/0.1/amp-geo-in-group';
+} from '#ads/google/a4a/utils';
+
+import {createElementWithAttributes} from '#core/dom';
+
+import {toggleExperiment} from '#experiments';
+
+import {Services} from '#service';
+import {installDocService} from '#service/ampdoc-impl';
+import {installExtensionsService} from '#service/extensions-impl';
+
+import {user} from '#utils/log';
+
+import {createIframePromise} from '#testing/iframe';
+
 import {MockA4AImpl} from '../../../../extensions/amp-a4a/0.1/test/utils';
-import {Services} from '../../../../src/services';
-import {buildUrl} from '../shared/url-builder';
-import {createElementWithAttributes} from '../../../../src/dom';
-import {createIframePromise} from '../../../../testing/iframe';
-import {installDocService} from '../../../../src/service/ampdoc-impl';
-import {installExtensionsService} from '../../../../src/service/extensions-impl';
-import {installXhrService} from '../../../../src/service/xhr-impl';
-import {toggleExperiment} from '../../../../src/experiments';
-import {user} from '../../../../src/log';
+import {GEO_IN_GROUP} from '../../../../extensions/amp-geo/0.1/amp-geo-in-group';
+import * as IniLoad from '../../../../src/ini-load';
 
 function setupForAdTesting(fixture) {
   installDocService(fixture.win, /* isSingleDoc */ true);
@@ -90,7 +78,7 @@ function noopMethods(
   sandbox.stub(impl.element, 'offsetHeight').value(pageLayoutBox.height);
 }
 
-describe('Google A4A utils', () => {
+describes.sandboxed('Google A4A utils', {}, (env) => {
   //TODO: Add tests for other utils functions.
 
   describe('#additionalDimensions', () => {
@@ -249,7 +237,7 @@ describe('Google A4A utils', () => {
     });
 
     it('should add the correct CSI signals', () => {
-      window.sandbox
+      env.sandbox
         .stub(Services, 'documentInfoForDoc')
         .returns({pageViewId: 777});
       const mockElement = {
@@ -388,7 +376,8 @@ describe('Google A4A utils', () => {
           'height': '50',
         });
         const impl = new MockA4AImpl(elem);
-        noopMethods(impl, fixture.ampdoc, window.sandbox);
+        impl.uiHandler = {isStickyAd: () => false};
+        noopMethods(impl, fixture.ampdoc, env.sandbox);
         return fixture.addElement(elem).then(() =>
           googleAdUrl(impl, '', 0, [], []).then((url1) => {
             expect(url1).to.match(/ady=11/);
@@ -409,7 +398,8 @@ describe('Google A4A utils', () => {
           'height': '50',
         });
         const impl = new MockA4AImpl(elem);
-        noopMethods(impl, fixture.ampdoc, window.sandbox);
+        impl.uiHandler = {isStickyAd: () => false};
+        noopMethods(impl, fixture.ampdoc, env.sandbox);
         const getRect = () => {
           return {'width': 100, 'height': 200};
         };
@@ -418,7 +408,7 @@ describe('Google A4A utils', () => {
         };
         const getScrollLeft = () => 12.1;
         const getScrollTop = () => 34.2;
-        const viewportStub = window.sandbox.stub(Services, 'viewportForDoc');
+        const viewportStub = env.sandbox.stub(Services, 'viewportForDoc');
         viewportStub.returns({getRect, getSize, getScrollTop, getScrollLeft});
         return googleAdUrl(impl, '', 0, {}, []).then((url1) => {
           expect(url1).to.match(/scr_x=12&scr_y=34/);
@@ -441,7 +431,8 @@ describe('Google A4A utils', () => {
           [AMP_EXPERIMENT_ATTRIBUTE]: '111,222',
         });
         const impl = new MockA4AImpl(elem);
-        noopMethods(impl, fixture.ampdoc, window.sandbox);
+        impl.uiHandler = {isStickyAd: () => false};
+        noopMethods(impl, fixture.ampdoc, env.sandbox);
         return fixture.addElement(elem).then(() => {
           return googleAdUrl(impl, '', 0, {}, ['789', '098']).then((url1) => {
             expect(url1).to.match(/eid=123%2C456%2C789%2C098/);
@@ -462,7 +453,8 @@ describe('Google A4A utils', () => {
           'height': '50',
         });
         const impl = new MockA4AImpl(elem);
-        noopMethods(impl, fixture.ampdoc, window.sandbox);
+        impl.uiHandler = {isStickyAd: () => false};
+        noopMethods(impl, fixture.ampdoc, env.sandbox);
         impl.win.AMP_CONFIG = {type: 'production'};
         impl.win.location.hash = 'foo,deid=123456,654321,bar';
         return fixture.addElement(elem).then(() => {
@@ -484,7 +476,8 @@ describe('Google A4A utils', () => {
           'height': '50',
         });
         const impl = new MockA4AImpl(elem);
-        noopMethods(impl, fixture.ampdoc, window.sandbox);
+        impl.uiHandler = {isStickyAd: () => false};
+        noopMethods(impl, fixture.ampdoc, env.sandbox);
         impl.win.gaGlobal = {cid: 'foo', hid: 'bar'};
         return fixture.addElement(elem).then(() => {
           return googleAdUrl(impl, '', 0, [], []).then((url) => {
@@ -506,8 +499,9 @@ describe('Google A4A utils', () => {
           'height': '50',
         });
         const impl = new MockA4AImpl(elem);
-        noopMethods(impl, fixture.ampdoc, window.sandbox);
-        const createElementStub = window.sandbox.stub(
+        impl.uiHandler = {isStickyAd: () => false};
+        noopMethods(impl, fixture.ampdoc, env.sandbox);
+        const createElementStub = env.sandbox.stub(
           impl.win.document,
           'createElement'
         );
@@ -535,8 +529,9 @@ describe('Google A4A utils', () => {
           'height': '50',
         });
         const impl = new MockA4AImpl(elem);
-        noopMethods(impl, fixture.ampdoc, window.sandbox);
-        const createElementStub = window.sandbox.stub(
+        impl.uiHandler = {isStickyAd: () => false};
+        noopMethods(impl, fixture.ampdoc, env.sandbox);
+        const createElementStub = env.sandbox.stub(
           impl.win.document,
           'createElement'
         );
@@ -562,9 +557,10 @@ describe('Google A4A utils', () => {
           'height': '50',
         });
         const impl = new MockA4AImpl(elem);
-        noopMethods(impl, fixture.ampdoc, window.sandbox);
+        impl.uiHandler = {isStickyAd: () => false};
+        noopMethods(impl, fixture.ampdoc, env.sandbox);
         impl.win.SVGElement = undefined;
-        const createElementStub = window.sandbox.stub(
+        const createElementStub = env.sandbox.stub(
           impl.win.document,
           'createElement'
         );
@@ -592,11 +588,12 @@ describe('Google A4A utils', () => {
           'height': '50',
         });
         const impl = new MockA4AImpl(elem);
-        noopMethods(impl, fixture.ampdoc, window.sandbox);
-        window.sandbox
+        impl.uiHandler = {isStickyAd: () => false};
+        noopMethods(impl, fixture.ampdoc, env.sandbox);
+        env.sandbox
           .stub(Services.viewerForDoc(impl.getAmpDoc()), 'getReferrerUrl')
           .returns(new Promise(() => {}));
-        const createElementStub = window.sandbox.stub(
+        const createElementStub = env.sandbox.stub(
           impl.win.document,
           'createElement'
         );
@@ -621,11 +618,79 @@ describe('Google A4A utils', () => {
         doc.win = fixture.win;
         const elem = createElementWithAttributes(doc, 'amp-a4a', {});
         const impl = new MockA4AImpl(elem);
-        noopMethods(impl, fixture.ampdoc, window.sandbox);
+        impl.uiHandler = {isStickyAd: () => false};
+        noopMethods(impl, fixture.ampdoc, env.sandbox);
         return fixture.addElement(elem).then(() => {
           return googleAdUrl(impl, '', Date.now(), [], []).then((url) => {
             expect(url).to.match(/[&?]bdt=[1-9][0-9]*[&$]/);
           });
+        });
+      });
+    });
+
+    it('should include user agent hint params', () => {
+      return createIframePromise().then((fixture) => {
+        setupForAdTesting(fixture);
+        const {doc} = fixture;
+        doc.win = fixture.win;
+        const elem = createElementWithAttributes(doc, 'amp-a4a', {});
+        const impl = new MockA4AImpl(elem);
+        impl.uiHandler = {isStickyAd: () => false};
+        noopMethods(impl, fixture.ampdoc, env.sandbox);
+        Object.defineProperty(impl.win.navigator, 'userAgentData', {
+          'value': {
+            'getHighEntropyValues': () =>
+              Promise.resolve({
+                platform: 'Windows',
+                platformVersion: 10,
+                architecture: 'x86',
+                model: 'Pixel',
+                uaFullVersion: 3.14159,
+                bitness: 42,
+                fullVersionList: [{brand: 'Chrome', version: '3.14159'}],
+                wow64: true,
+              }),
+          },
+        });
+        return fixture.addElement(elem).then(() => {
+          return googleAdUrl(impl, '', Date.now(), [], []).then((url) => {
+            expect(url).to.match(
+              /[&?]uap=Windows&uapv=10&uaa=x86&uam=Pixel&uafv=3.14159&uab=42&uafvl=%5B%7B%22brand%22%3A%22Chrome%22%2C%22version%22%3A%223.14159%22%7D%5D&uaw=true[&$]/
+            );
+          });
+        });
+      });
+    });
+
+    it('should proceed if user agent hint params time outs', () => {
+      return createIframePromise().then((fixture) => {
+        setupForAdTesting(fixture);
+        const clock = fakeTimers.withGlobal(fixture.win).install({
+          toFake: ['Date', 'setTimeout', 'clearTimeout'],
+        });
+        const {doc} = fixture;
+        doc.win = fixture.win;
+        const elem = createElementWithAttributes(doc, 'amp-a4a', {});
+        const impl = new MockA4AImpl(elem);
+        impl.uiHandler = {isStickyAd: () => false};
+        noopMethods(impl, fixture.ampdoc, env.sandbox);
+        Object.defineProperty(impl.win.navigator, 'userAgentData', {
+          'value': {
+            // Promise that never resolves
+            'getHighEntropyValues': () => new Promise(() => {}),
+          },
+        });
+        expectAsyncConsoleError('[AMP-A4A] UACH timeout!', 1);
+        return fixture.addElement(elem).then(() => {
+          const promise = googleAdUrl(impl, '', Date.now(), [], []).then(
+            (url) => {
+              expect(url).to.not.match(
+                /[&?]uap=Windows&uapv=10&uaa=x86&uam=Pixel&uafv=3.14159&uab=42&uafvl=%5B%7B%22brand%22%3A%22Chrome%22%2C%22version%22%3A%223.14159%22%7D%5D&uaw=true[&$]/
+              );
+            }
+          );
+          clock.tick(1001);
+          return promise;
         });
       });
     });
@@ -713,228 +778,6 @@ describe('Google A4A utils', () => {
     });
   });
 
-  describes.fakeWin('#getIdentityTokenRequestUrl', {}, (env) => {
-    let doc;
-    let fakeWin;
-    beforeEach(() => {
-      const documentInfoStub = env.sandbox.stub(Services, 'documentInfoForDoc');
-      doc = {};
-      fakeWin = {location: {}};
-      documentInfoStub
-        .withArgs(doc)
-        .returns({canonicalUrl: 'http://f.blah.com?some_site'});
-    });
-
-    it('should use google.com if at top', () => {
-      fakeWin.top = fakeWin;
-      fakeWin.location.ancestorOrigins = ['foo.google.com.eu'];
-      expect(getIdentityTokenRequestUrl(fakeWin, doc)).to.equal(
-        'https://adservice.google.com/adsid/integrator.json?' +
-          'domain=f.blah.com'
-      );
-    });
-
-    it('should use google.com if no ancestorOrigins', () => {
-      expect(getIdentityTokenRequestUrl(fakeWin, doc)).to.equal(
-        'https://adservice.google.com/adsid/integrator.json?' +
-          'domain=f.blah.com'
-      );
-    });
-
-    it('should use google.com if non-google top', () => {
-      fakeWin.location.ancestorOrigins = ['foo.google2.com'];
-      expect(getIdentityTokenRequestUrl(fakeWin, doc)).to.equal(
-        'https://adservice.google.com/adsid/integrator.json?' +
-          'domain=f.blah.com'
-      );
-    });
-
-    it('should use google ancestor origin based top domain', () => {
-      fakeWin.location.ancestorOrigins = ['foo.google.eu', 'blah.google.fr'];
-      expect(getIdentityTokenRequestUrl(fakeWin, doc)).to.equal(
-        'https://adservice.google.fr/adsid/integrator.json?' +
-          'domain=f.blah.com'
-      );
-    });
-
-    it('should use supplied domain', () => {
-      fakeWin.location.ancestorOrigins = ['foo.google.fr'];
-      expect(getIdentityTokenRequestUrl(fakeWin, doc, '.google.eu')).to.equal(
-        'https://adservice.google.eu/adsid/integrator.json?' +
-          'domain=f.blah.com'
-      );
-    });
-  });
-
-  describes.fakeWin(
-    '#getIdentityToken',
-    {amp: true, mockFetch: true},
-    (env) => {
-      beforeEach(() => {
-        installXhrService(env.win);
-        const documentInfoStub = env.sandbox.stub(
-          Services,
-          'documentInfoForDoc'
-        );
-        documentInfoStub
-          .withArgs(env.ampdoc)
-          .returns({canonicalUrl: 'http://f.blah.com?some_site'});
-      });
-
-      afterEach(() => {
-        // Verify fetch mocks are all consumed.
-        expect(env.fetchMock.done()).to.be.true;
-      });
-
-      const getUrl = (domain) => {
-        domain = domain || 'google.com';
-        return (
-          `https:\/\/adservice\.${domain}\/adsid\/integrator\.json\?` +
-          'domain=f.blah.com'
-        );
-      };
-
-      it('should ignore response if required fields are missing', () => {
-        env.expectFetch(getUrl(), JSON.stringify({newToken: 'abc'}));
-        return getIdentityToken(env.win, env.ampdoc).then((result) => {
-          expect(result.token).to.not.be.ok;
-          expect(result.jar).to.not.be.ok;
-          expect(result.pucrd).to.not.be.ok;
-          expect(result.freshLifetimeSecs).to.not.be.ok;
-          expect(result.validLifetimeSecs).to.not.be.ok;
-          expect(result.fetchTimeMs).to.be.at.least(0);
-        });
-      });
-
-      it('should fetch full token as expected', () => {
-        env.expectFetch(
-          getUrl(),
-          JSON.stringify({
-            newToken: 'abc',
-            '1p_jar': 'some_jar',
-            pucrd: 'some_pucrd',
-            freshLifetimeSecs: '1234',
-            validLifetimeSecs: '5678',
-          })
-        );
-        return getIdentityToken(env.win, env.ampdoc).then((result) => {
-          expect(result.token).to.equal('abc');
-          expect(result.jar).to.equal('some_jar');
-          expect(result.pucrd).to.equal('some_pucrd');
-          expect(result.freshLifetimeSecs).to.equal(1234);
-          expect(result.validLifetimeSecs).to.equal(5678);
-          expect(result.fetchTimeMs).to.be.at.least(0);
-        });
-      });
-
-      it('should redirect as expected', () => {
-        env.expectFetch(getUrl(), JSON.stringify({altDomain: '.google.fr'}));
-        env.expectFetch(
-          getUrl('google.fr'),
-          JSON.stringify({
-            newToken: 'abc',
-            freshLifetimeSecs: '1234',
-            validLifetimeSecs: '5678',
-          })
-        );
-        return getIdentityToken(env.win, env.ampdoc, '').then((result) => {
-          expect(result.token).to.equal('abc');
-          expect(result.jar).to.equal('');
-          expect(result.pucrd).to.equal('');
-          expect(result.freshLifetimeSecs).to.equal(1234);
-          expect(result.validLifetimeSecs).to.equal(5678);
-          expect(result.fetchTimeMs).to.be.at.least(0);
-        });
-      });
-
-      it('should stop after 1 redirect', () => {
-        env.expectFetch(getUrl(), JSON.stringify({altDomain: '.google.fr'}));
-        env.expectFetch(
-          getUrl('google.fr'),
-          JSON.stringify({altDomain: '.google.com'})
-        );
-        return getIdentityToken(env.win, env.ampdoc).then((result) => {
-          expect(result.token).to.not.be.ok;
-          expect(result.jar).to.not.be.ok;
-          expect(result.pucrd).to.not.be.ok;
-          expect(result.fetchTimeMs).to.be.at.least(0);
-        });
-      });
-
-      it('should use previous execution', () => {
-        const ident = {
-          newToken: 'foo',
-          freshLifetimeSecs: '1234',
-          validLifetimeSecs: '5678',
-        };
-        env.win['goog_identity_prom'] = Promise.resolve(ident);
-        return getIdentityToken(env.win, env.ampdoc).then((result) =>
-          expect(result).to.jsonEqual(ident)
-        );
-      });
-
-      it('should handle fetch error', () => {
-        env.sandbox
-          .stub(Services, 'xhrFor')
-          .returns({fetchJson: () => Promise.reject('some network failure')});
-        return getIdentityToken(env.win, env.ampdoc).then((result) =>
-          expect(result).to.jsonEqual({})
-        );
-      });
-
-      it('should fetch if SUFFICIENT consent', () => {
-        env.expectFetch(
-          getUrl(),
-          JSON.stringify({
-            newToken: 'abc',
-            '1p_jar': 'some_jar',
-            pucrd: 'some_pucrd',
-            freshLifetimeSecs: '1234',
-            validLifetimeSecs: '5678',
-          })
-        );
-        env.sandbox.stub(Services, 'consentPolicyServiceForDocOrNull').returns(
-          Promise.resolve({
-            whenPolicyResolved: () => CONSENT_POLICY_STATE.SUFFICIENT,
-          })
-        );
-        return getIdentityToken(env.win, env.ampdoc, 'default').then((result) =>
-          expect(result.token).to.equal('abc')
-        );
-      });
-
-      it.configure()
-        .skipFirefox()
-        .run('should not fetch if INSUFFICIENT consent', () => {
-          env.sandbox
-            .stub(Services, 'consentPolicyServiceForDocOrNull')
-            .returns(
-              Promise.resolve({
-                whenPolicyResolved: () => CONSENT_POLICY_STATE.INSUFFICIENT,
-              })
-            );
-          return expect(
-            getIdentityToken(env.win, env.ampdoc, 'default')
-          ).to.eventually.jsonEqual({});
-        });
-
-      it.configure()
-        .skipFirefox()
-        .run('should not fetch if UNKNOWN consent', () => {
-          env.sandbox
-            .stub(Services, 'consentPolicyServiceForDocOrNull')
-            .returns(
-              Promise.resolve({
-                whenPolicyResolved: () => CONSENT_POLICY_STATE.UNKNOWN,
-              })
-            );
-          return expect(
-            getIdentityToken(env.win, env.ampdoc, 'default')
-          ).to.eventually.jsonEqual({});
-        });
-    }
-  );
-
   describe('variables for amp-analytics', () => {
     let a4a;
     let ampdoc;
@@ -989,7 +832,7 @@ describe('Google A4A utils', () => {
     });
 
     it('should include viewer lastVisibleTime', () => {
-      window.sandbox.stub(ampdoc, 'getLastVisibleTime').returns(300);
+      env.sandbox.stub(ampdoc, 'getLastVisibleTime').returns(300);
 
       const vars = getCsiAmpAnalyticsVariables('trigger', a4a, null);
       expect(vars['viewerLastVisibleTime']).to.be.a('number');
@@ -1213,14 +1056,13 @@ describes.realWin('#groupAmpAdsByType', {amp: true}, (env) => {
       expect(result['bar'].length).to.equal(2);
       expect(result['hello']).to.be.ok;
       expect(result['hello'].length).to.equal(1);
-      return Promise.all(
-        result['bar'].concat(result['hello'])
-      ).then((baseElements) =>
-        baseElements.forEach((baseElement) =>
-          expect(baseElement.element.getAttribute('type')).to.equal(
-            'doubleclick'
+      return Promise.all(result['bar'].concat(result['hello'])).then(
+        (baseElements) =>
+          baseElements.forEach((baseElement) =>
+            expect(baseElement.element.getAttribute('type')).to.equal(
+              'doubleclick'
+            )
           )
-        )
       );
     });
   });

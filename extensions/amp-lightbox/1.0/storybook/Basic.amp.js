@@ -1,40 +1,39 @@
-/**
- * Copyright 2020 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-import * as Preact from '../../../../src/preact';
-import {boolean, select, text, withKnobs} from '@storybook/addon-knobs';
 import {withAmp} from '@ampproject/storybook-addon';
+
+import * as Preact from '#preact';
 
 export default {
   title: 'amp-lightbox-1_0',
-  decorators: [withKnobs, withAmp],
+  decorators: [withAmp],
 
   parameters: {
     extensions: [{name: 'amp-lightbox', version: '1.0'}],
   },
+  argTypes: {
+    animation: {
+      name: 'animation',
+      control: {type: 'select'},
+      options: ['fade-in', 'fly-in-top', 'fly-in-bottom'],
+    },
+    backgroundColor: {
+      name: 'background color',
+      control: {type: 'text'},
+      defaultValue: '',
+    },
+    color: {
+      name: 'font color',
+      control: {type: 'text'},
+      defaultValue: '',
+    },
+    lotsOfText: {
+      name: 'lotsOfText',
+      control: {type: 'boolean'},
+      defaultValue: true,
+    },
+  },
 };
 
-export const Default = () => {
-  const animation = select('animation', [
-    'fade-in',
-    'fly-in-top',
-    'fly-in-bottom',
-  ]);
-  const backgroundColor = text('background color', '');
-  const color = text('font color', '');
+export const Default = ({animation, backgroundColor, color, ...args}) => {
   return (
     <>
       <style>{`
@@ -44,11 +43,14 @@ export const Default = () => {
         }
       `}</style>
       <div style="height: 300px;">
-        <amp-lightbox id="lightbox" layout="nodisplay" animation={animation}>
+        <amp-lightbox
+          id="lightbox"
+          layout="nodisplay"
+          animation={animation}
+          {...args}
+        >
           <p>Test</p>
-          <button slot="close-button" on="tap:lightbox.close">
-            Close
-          </button>
+          <button slot="close-button">Close</button>
         </amp-lightbox>
         <div class="buttons">
           <button on="tap:lightbox">Open</button>
@@ -58,15 +60,13 @@ export const Default = () => {
   );
 };
 
-export const overflowAuto = () => {
-  const animation = select('animation', [
-    'fade-in',
-    'fly-in-top',
-    'fly-in-bottom',
-  ]);
-  const backgroundColor = text('background color', 'rgba(0,0,0,0.5)');
-  const color = text('font color', '');
-  const lotsOfText = boolean('lots of text?', true);
+export const OverflowAuto = ({
+  animation,
+  backgroundColor,
+  color,
+  lotsOfText,
+  ...args
+}) => {
   return (
     <>
       <style>{`
@@ -76,7 +76,12 @@ export const overflowAuto = () => {
         }
       `}</style>
       <div style="height: 300px;">
-        <amp-lightbox id="lightbox" layout="nodisplay" animation={animation}>
+        <amp-lightbox
+          id="lightbox"
+          layout="nodisplay"
+          animation={animation}
+          {...args}
+        >
           <p>
             Dessert tootsie roll marzipan pastry. Powder powder jelly beans
             chocolate bar candy sugar plum. Jelly-o gummi bears jelly icing

@@ -1,28 +1,12 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {parseQueryString} from '#core/types/string/url';
 
-import {BrowserController, RequestBank} from '../../testing/test-helper';
-import {parseQueryString} from '../../src/url';
+import {BrowserController, RequestBank} from '#testing/helpers/service';
 
-// TODO(wg-analytics): These tests time out on Firefox and Safari.
-describe
+// TODO(wg-components): These tests time out on Safari.
+describes.sandboxed
   .configure()
   .skipSafari()
-  .skipFirefox()
-  .run('amp-analytics', function () {
+  .run('amp-analytics', {}, function () {
     describes.integration(
       'basic pageview',
       {
@@ -928,17 +912,13 @@ describe
       }
     );
 
-    // TODO: Find source of test failure on edge.
-    describe
-      .configure()
-      .skipEdge()
-      .run('amp-analytics:shadow mode', function () {
-        describes.integration(
-          'basic pageview',
-          {
-            // TODO(ccordry): Figure out how to write cookie in shadow case, so that
-            // we can verify CLIENT_ID() is reading the right value.
-            body: `
+    describe('amp-analytics:shadow mode', function () {
+      describes.integration(
+        'basic pageview',
+        {
+          // TODO(ccordry): Figure out how to write cookie in shadow case, so that
+          // we can verify CLIENT_ID() is reading the right value.
+          body: `
         <!-- put amp-analytics > 3 viewports away from viewport -->
         <div style="height: 400vh"></div>
         <amp-analytics>
@@ -964,20 +944,20 @@ describe
           }
           </script>
         </amp-analytics>`,
-            extensions: ['amp-analytics'],
-            ampdoc: 'shadow',
-          },
-          () => {
-            it('should send request', () => {
-              return RequestBank.withdraw().then((req) => {
-                expect(req.url).to.match(/\/?a=2&b=Shadow%20Viewer&cid=amp-.*/);
-                expect(
-                  req.headers.referer,
-                  'should keep referrer if no referrerpolicy specified'
-                ).to.be.ok;
-              });
+          extensions: ['amp-analytics'],
+          ampdoc: 'shadow',
+        },
+        () => {
+          it('should send request', () => {
+            return RequestBank.withdraw().then((req) => {
+              expect(req.url).to.match(/\/?a=2&b=Shadow%20Viewer&cid=amp-.*/);
+              expect(
+                req.headers.referer,
+                'should keep referrer if no referrerpolicy specified'
+              ).to.be.ok;
             });
-          }
-        );
-      });
+          });
+        }
+      );
+    });
   });

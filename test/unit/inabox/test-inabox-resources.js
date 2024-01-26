@@ -1,23 +1,12 @@
-/**
- * Copyright 2019 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-import {Deferred} from '../../../src/core/data-structures/promise';
-import {InaboxResources} from '../../../src/inabox/inabox-resources';
-import {ResourceState} from '../../../src/service/resource';
-import {macroTask} from '../../../testing/yield';
-import {toggleExperiment} from '../../../src/experiments';
+import {Deferred} from '#core/data-structures/promise';
+
+import {toggleExperiment} from '#experiments';
+
+import {InaboxResources} from '#inabox/inabox-resources';
+
+import {ResourceState_Enum} from '#service/resource';
+
+import {macroTask, sleep} from '#testing/helpers';
 
 describes.realWin('inabox-resources', {amp: true}, (env) => {
   let win;
@@ -76,11 +65,27 @@ describes.realWin('inabox-resources', {amp: true}, (env) => {
 
     await env.ampdoc.whenReady();
     expect(buildStub).to.be.calledOnce;
-    await new Promise(setTimeout);
+    await macroTask();
     schedulePassSpy.resetHistory();
     resolveBuild();
-    await new Promise(setTimeout);
+    await macroTask();
     expect(schedulePassSpy).to.be.calledOnce;
+  });
+
+  it('upgraded: should handle when build() returns undefined', async () => {
+    const schedulePassSpy = env.sandbox.stub(resources, 'schedulePass');
+    const element1 = env.createAmpElement('amp-foo');
+    resources.add(element1);
+    const resource1 = resources.getResourceForElement(element1);
+    const buildStub = env.sandbox.stub(resource1, 'build');
+    buildStub.returns(undefined);
+    resources.upgraded(element1);
+
+    await env.ampdoc.whenReady();
+    await macroTask();
+
+    expect(buildStub).to.be.calledOnce;
+    expect(schedulePassSpy).to.be.calledTwice;
   });
 
   it('eagerly builds amp elements', async () => {
@@ -149,10 +154,10 @@ describes.realWin('inabox-resources', {amp: true}, (env) => {
     expect(resource2.unload).to.be.calledOnce;
   });
 
-  it('should ignore V1 resources for layout pass', async () => {
+  it('should ignore R1 resources for layout pass', async () => {
     const element1 = env.createAmpElement('amp-foo');
     const element2 = env.createAmpElement('amp-bar');
-    env.sandbox.stub(element2, 'V1').returns(true);
+    env.sandbox.stub(element2, 'R1').returns(true);
 
     win.document.body.appendChild(element1);
     win.document.body.appendChild(element2);
@@ -170,17 +175,16 @@ describes.realWin('inabox-resources', {amp: true}, (env) => {
     env.sandbox.stub(resource2, 'build').resolves();
     env.sandbox
       .stub(resource1, 'getState')
-      .returns(ResourceState.READY_FOR_LAYOUT);
+      .returns(ResourceState_Enum.READY_FOR_LAYOUT);
     env.sandbox
       .stub(resource2, 'getState')
-      .returns(ResourceState.READY_FOR_LAYOUT);
+      .returns(ResourceState_Enum.READY_FOR_LAYOUT);
     env.sandbox.stub(resource1, 'isDisplayed').returns(true);
     env.sandbox.stub(resource2, 'isDisplayed').returns(true);
     resources.upgraded(element1);
 
     resources.schedulePass(0);
-    await new Promise(setTimeout);
-    await new Promise(setTimeout);
+    await sleep(10);
 
     expect(resource1.measure).to.be.called;
     expect(resource2.measure).to.not.be.called;

@@ -1,19 +1,3 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import {parseUrlDeprecated, resolveRelativeUrl} from '../src/url';
 
 /**
@@ -226,6 +210,9 @@ export class FakeWindow {
     /** @const */
     this.Date = window.Date;
 
+    /** @const */
+    this.performance = new FakePerformance(this);
+
     /** polyfill setTimeout. */
     this.setTimeout = function () {
       return window.setTimeout.apply(window, arguments);
@@ -296,8 +283,8 @@ class EventListeners {
     target.eventListeners = new EventListeners();
     const {
       addEventListener: originalAdd,
-      removeEventListener: originalRemove,
       postMessage: originalPostMessage,
+      removeEventListener: originalRemove,
     } = target;
     target.addEventListener = function (type, handler, captureOrOpts) {
       target.eventListeners.add(type, handler, captureOrOpts);
@@ -341,8 +328,8 @@ class EventListeners {
         typeof captureOrOpts == 'boolean'
           ? captureOrOpts
           : typeof captureOrOpts == 'object'
-          ? captureOrOpts.capture || false
-          : false,
+            ? captureOrOpts.capture || false
+            : false,
       options: typeof captureOrOpts == 'object' ? captureOrOpts : null,
     };
   }
@@ -625,7 +612,7 @@ export class FakeHistory {
  */
 export class FakeStorage {
   constructor() {
-    /** @const {!Object<string, string>} */
+    /** @const {!{[key: string]: string}} */
     this.values = {};
 
     // Length.
@@ -688,7 +675,7 @@ export class FakeCustomElements {
     /** @type {number} */
     this.count = 0;
 
-    /** @const {!Object<string, !{prototype: !Prototype}>} */
+    /** @const {!{[key: string]: !{prototype: !Prototype}}} */
     this.elements = {};
 
     /**
@@ -764,6 +751,21 @@ export class FakeMutationObserver {
       this.scheduled_ = null;
       this.callback_(this.takeRecords_());
     }));
+  }
+}
+
+export class FakePerformance {
+  constructor(win) {
+    /** @const */
+    this.win_ = win;
+  }
+
+  get timeOrigin() {
+    return 1;
+  }
+
+  now() {
+    return this.win_.Date.now();
   }
 }
 

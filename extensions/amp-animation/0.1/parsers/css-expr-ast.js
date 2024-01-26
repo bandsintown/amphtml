@@ -1,23 +1,8 @@
-/**
- * Copyright 2017 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 const FINAL_URL_RE = /^(data|https)\:/i;
 const DEG_TO_RAD = (2 * Math.PI) / 360;
 const GRAD_TO_RAD = Math.PI / 200;
-const VAR_CSS_RE = /\b(calc|min|max|clamp|var|url|rand|index|width|height|num|length|x|y)\(/i;
+const VAR_CSS_RE =
+  /\b(calc|min|max|clamp|var|url|rand|index|width|height|num|length|x|y)\(/i;
 const NORM_CSS_RE = /\d(%|em|rem|vw|vh|vmin|vmax|s|deg|grad)/i;
 const INFINITY_RE = /^(infinity|infinite)$/i;
 const BOX_DIMENSIONS = ['h', 'w', 'h', 'w'];
@@ -208,10 +193,10 @@ export class CssConcatNode extends CssNode {
       opt_array instanceof CssConcatNode
         ? opt_array.array_
         : Array.isArray(opt_array)
-        ? opt_array
-        : opt_array
-        ? [opt_array]
-        : [];
+          ? opt_array
+          : opt_array
+            ? [opt_array]
+            : [];
     /** @const @private {?Array<string>} */
     this.dimensions_ = opt_dimensions || null;
   }
@@ -722,8 +707,8 @@ export function createPositionNode(value) {
         kw == 'left' || kw == 'right'
           ? 'w'
           : kw == 'top' || kw == 'bottom'
-          ? 'h'
-          : '';
+            ? 'h'
+            : '';
       dims[i] = dims[i + 1] = dim;
     }
   }
@@ -830,14 +815,14 @@ export class CssTranslateNode extends CssFuncNode {
       suffix == ''
         ? ['w', 'h']
         : suffix == 'x'
-        ? ['w']
-        : suffix == 'y'
-        ? ['h']
-        : suffix == 'z'
-        ? ['z']
-        : suffix == '3d'
-        ? ['w', 'h', 'z']
-        : null
+          ? ['w']
+          : suffix == 'y'
+            ? ['h']
+            : suffix == 'z'
+              ? ['z']
+              : suffix == '3d'
+                ? ['w', 'h', 'z']
+                : null
     );
     /** @const @protected {string} */
     this.suffix_ = suffix;

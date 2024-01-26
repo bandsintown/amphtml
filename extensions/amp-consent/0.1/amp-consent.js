@@ -1,19 +1,23 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {Deferred} from '#core/data-structures/promise';
+import {realChildElements} from '#core/dom/query';
+import {toggle} from '#core/dom/style';
+import {isArray, isEnumValue, isObject} from '#core/types';
+import {hasOwn} from '#core/types/object';
 
+import {Services} from '#service';
+import {
+  NOTIFICATION_UI_MANAGER,
+  NotificationUiManager,
+} from '#service/notification-ui-manager';
+
+import {getData} from '#utils/event-helper';
+import {dev, devAssert, user, userAssert} from '#utils/log';
+
+import {
+  ConsentConfig,
+  expandConsentEndpointUrl,
+  expandPolicyConfig,
+} from './consent-config';
 import {
   CONSENT_ITEM_STATE,
   ConsentMetadataDef,
@@ -23,37 +27,19 @@ import {
   getConsentStateValue,
   hasStoredValue,
 } from './consent-info';
-import {CSS} from '../../../build/amp-consent-0.1.css';
-import {
-  ConsentConfig,
-  expandConsentEndpointUrl,
-  expandPolicyConfig,
-} from './consent-config';
 import {ConsentPolicyManager} from './consent-policy-manager';
 import {ConsentStateManager} from './consent-state-manager';
 import {ConsentUI} from './consent-ui';
 import {CookieWriter} from './cookie-writer';
-import {Deferred} from '../../../src/core/data-structures/promise';
-import {
-  NOTIFICATION_UI_MANAGER,
-  NotificationUiManager,
-} from '../../../src/service/notification-ui-manager';
-import {Services} from '../../../src/services';
 import {TcfApiCommandManager} from './tcf-api-command-manager';
+
+import {CSS} from '../../../build/amp-consent-0.1.css';
+import {getServicePromiseForDoc} from '../../../src/service-helpers';
 import {
   assertHttpsUrl,
   getSourceUrl,
   resolveRelativeUrl,
 } from '../../../src/url';
-import {dev, devAssert, user, userAssert} from '../../../src/log';
-import {dict, hasOwn} from '../../../src/core/types/object';
-import {getData} from '../../../src/event-helper';
-import {getServicePromiseForDoc} from '../../../src/service';
-import {isArray, isEnumValue, isObject} from '../../../src/core/types';
-
-import {isExperimentOn} from '../../../src/experiments';
-
-import {toggle} from '../../../src/style';
 
 const CONSENT_STATE_MANAGER = 'consentStateManager';
 const CONSENT_POLICY_MANAGER = 'consentPolicyManager';
@@ -123,27 +109,8 @@ export class AmpConsent extends AMP.BaseElement {
     /** @private {?string} */
     this.matchedGeoGroup_ = null;
 
-    /** @private {?boolean} */
-    this.isTcfPostMessageProxyExperimentOn_ = isExperimentOn(
-      this.win,
-      'tcf-post-message-proxy-api'
-    );
-
-    /** @private {?boolean} */
-    this.isGranularConsentExperimentOn_ = isExperimentOn(
-      this.win,
-      'amp-consent-granular-consent'
-    );
-
     /** @private {?Promise<?Array>} */
-    this.purposeConsentRequired_ = this.isGranularConsentExperimentOn_
-      ? null
-      : Promise.resolve();
-
-    /** @private @const {?Function} */
-    this.boundHandleIframeMessages_ = this.isTcfPostMessageProxyExperimentOn_
-      ? this.handleIframeMessages_.bind(this)
-      : null;
+    this.purposeConsentRequired_ = null;
   }
 
   /** @override */
@@ -194,7 +161,7 @@ export class AmpConsent extends AMP.BaseElement {
     if (this.consentConfig_['postPromptUI']) {
       this.postPromptUI_ = new ConsentUI(
         this,
-        dict({}),
+        {},
         this.consentConfig_['postPromptUI']
       );
     }
@@ -216,14 +183,14 @@ export class AmpConsent extends AMP.BaseElement {
      *   'postPromptUI': ...
      * }
      */
-    const policyConfig = this.consentConfig_['policy'] || dict({});
+    const policyConfig = this.consentConfig_['policy'] || {};
 
     this.policyConfig_ = expandPolicyConfig(
       policyConfig,
       /** @type {string} */ (this.consentId_)
     );
 
-    const children = this.getRealChildren();
+    const children = realChildElements(this.element);
     for (let i = 0; i < children.length; i++) {
       const child = children[i];
       toggle(child, false);
@@ -235,7 +202,9 @@ export class AmpConsent extends AMP.BaseElement {
       this.getAmpDoc(),
       CONSENT_POLICY_MANAGER
     ).then((manager) => {
-      this.consentPolicyManager_ = /** @type {!ConsentPolicyManager} */ (manager);
+      this.consentPolicyManager_ = /** @type {!ConsentPolicyManager} */ (
+        manager
+      );
       this.consentPolicyManager_.setLegacyConsentInstanceId(
         /** @type {string} */ (this.consentId_)
       );
@@ -262,7 +231,9 @@ export class AmpConsent extends AMP.BaseElement {
       this.getAmpDoc(),
       NOTIFICATION_UI_MANAGER
     ).then((manager) => {
-      this.notificationUiManager_ = /** @type {!NotificationUiManager} */ (manager);
+      this.notificationUiManager_ = /** @type {!NotificationUiManager} */ (
+        manager
+      );
     });
 
     const cookieWriterPromise = this.consentConfig_['cookies']
@@ -295,11 +266,9 @@ export class AmpConsent extends AMP.BaseElement {
       this.handleClosingUiAction_(ACTION_TYPE.DISMISS);
     });
 
-    if (this.isGranularConsentExperimentOn_) {
-      this.registerAction('setPurpose', (invocation) => {
-        this.handleSetPurpose_(invocation);
-      });
-    }
+    this.registerAction('setPurpose', (invocation) => {
+      this.handleSetPurpose_(invocation);
+    });
 
     this.registerAction('prompt', (invocation) =>
       this.handleReprompt_(invocation)
@@ -335,6 +304,7 @@ export class AmpConsent extends AMP.BaseElement {
       }
 
       let consentString;
+      let tcfPolicyVersion;
       let metadata;
       const data = getData(event);
 
@@ -368,6 +338,9 @@ export class AmpConsent extends AMP.BaseElement {
           data['info'] = undefined;
         }
         consentString = data['info'];
+        tcfPolicyVersion = this.validateTCFPolicyVersion_(
+          data['tcfPolicyVersion']
+        );
         metadata = this.validateMetadata_(data['consentMetadata']);
       }
 
@@ -393,7 +366,7 @@ export class AmpConsent extends AMP.BaseElement {
               purposeConsents
             );
           }
-          this.handleAction_(action, consentString, metadata);
+          this.handleAction_(action, consentString, metadata, tcfPolicyVersion);
         }
       }
     });
@@ -486,8 +459,41 @@ export class AmpConsent extends AMP.BaseElement {
    * @param {string} action
    * @param {string=} consentString
    * @param {!ConsentMetadataDef=} opt_consentMetadata
+   * @param {number=} opt_tcfPolicyVersion
    */
-  handleAction_(action, consentString, opt_consentMetadata) {
+  handleAction_(
+    action,
+    consentString,
+    opt_consentMetadata,
+    opt_tcfPolicyVersion
+  ) {
+    const setDirtyBitPromise =
+      isEnumValue(ACTION_TYPE, action) &&
+      this.consentConfig_['clearDirtyBitOnResponse_dontUseThisItMightBeRemoved']
+        ? this.consentStateManager_.setDirtyBit(false)
+        : Promise.resolve();
+    setDirtyBitPromise.then(() => {
+      this.handleActionAfterClearingDirtyBit_(
+        action,
+        consentString,
+        opt_consentMetadata,
+        opt_tcfPolicyVersion
+      );
+    });
+  }
+
+  /**
+   * @param {string} action
+   * @param {string=} consentString
+   * @param {!ConsentMetadataDef=} opt_consentMetadata
+   * @param {number=} opt_tcfPolicyVersion
+   */
+  handleActionAfterClearingDirtyBit_(
+    action,
+    consentString,
+    opt_consentMetadata,
+    opt_tcfPolicyVersion
+  ) {
     this.consentStateChangedViaPromptUI_ = true;
 
     if (action == ACTION_TYPE.ACCEPT) {
@@ -495,14 +501,16 @@ export class AmpConsent extends AMP.BaseElement {
       this.consentStateManager_.updateConsentInstanceState(
         CONSENT_ITEM_STATE.ACCEPTED,
         consentString,
-        opt_consentMetadata
+        opt_consentMetadata,
+        opt_tcfPolicyVersion
       );
     } else if (action == ACTION_TYPE.REJECT) {
       // reject
       this.consentStateManager_.updateConsentInstanceState(
         CONSENT_ITEM_STATE.REJECTED,
         consentString,
-        opt_consentMetadata
+        opt_consentMetadata,
+        opt_tcfPolicyVersion
       );
     } else if (action == ACTION_TYPE.DISMISS) {
       this.consentStateManager_.updateConsentInstanceState(
@@ -522,10 +530,7 @@ export class AmpConsent extends AMP.BaseElement {
    * @return {!Promise}
    */
   maybeSetConsentPurposeDefaults_(action, opt_invocation) {
-    if (
-      !this.isGranularConsentExperimentOn_ ||
-      typeof opt_invocation?.args?.purposeConsentDefault !== 'boolean'
-    ) {
+    if (typeof opt_invocation?.args?.purposeConsentDefault !== 'boolean') {
       return Promise.resolve();
     }
     if (action === ACTION_TYPE.DISMISS) {
@@ -559,10 +564,13 @@ export class AmpConsent extends AMP.BaseElement {
    */
   handleReprompt_(invocation) {
     const {args} = invocation;
-    if (args && args['expireCache'] === true) {
-      this.consentStateManager_.setDirtyBit();
-    }
-    this.scheduleDisplay_(true);
+    const setDirtyBitPromise =
+      args?.['expireCache'] === true
+        ? this.consentStateManager_.setDirtyBit()
+        : Promise.resolve();
+    setDirtyBitPromise.then(() => {
+      this.scheduleDisplay_(true);
+    });
   }
 
   /**
@@ -678,7 +686,8 @@ export class AmpConsent extends AMP.BaseElement {
           response['consentStateValue'],
           response['consentString'] || undefined,
           response['consentMetadata'],
-          response['purposeConsents']
+          response['purposeConsents'],
+          response['tcfPolicyVersion']
         );
       }
     });
@@ -691,18 +700,19 @@ export class AmpConsent extends AMP.BaseElement {
    * @param {?string=} responseConsentString
    * @param {?JsonObject=} responseMetadata
    * @param {?JsonObject=} responsePurposeConsents
+   * @param {number=} responseTcfPolicyVersion
    */
   updateCacheIfNotNull_(
     responseStateValue,
     responseConsentString,
     responseMetadata,
-    responsePurposeConsents
+    responsePurposeConsents,
+    responseTcfPolicyVersion
   ) {
     const consentStateValue = convertEnumValueToState(responseStateValue);
     // consentStateValue and consentString are treated as a pair that will update together
     if (consentStateValue !== null) {
       if (
-        this.isGranularConsentExperimentOn_ &&
         responsePurposeConsents &&
         isObject(responsePurposeConsents) &&
         Object.keys(responsePurposeConsents).length
@@ -712,10 +722,12 @@ export class AmpConsent extends AMP.BaseElement {
           responsePurposeConsents
         );
       }
+
       this.consentStateManager_.updateConsentInstanceState(
         consentStateValue,
         responseConsentString,
-        this.validateMetadata_(responseMetadata)
+        this.validateMetadata_(responseMetadata),
+        responseTcfPolicyVersion
       );
     }
   }
@@ -726,39 +738,38 @@ export class AmpConsent extends AMP.BaseElement {
    * @return {!Promise<?JsonObject>}
    */
   getConsentRemote_() {
+    // TODO(alanorozco): once() this instead of using an instance property.
     if (this.remoteConfigPromise_) {
       return this.remoteConfigPromise_;
     }
-    if (!this.consentConfig_['checkConsentHref']) {
+    const {'checkConsentHref': checkConsentHref} = this.consentConfig_;
+    if (!checkConsentHref) {
       this.remoteConfigPromise_ = Promise.resolve(null);
     } else {
-      const storeConsentPromise = this.consentStateManager_.getLastConsentInstanceInfo();
+      const storeConsentPromise =
+        this.consentStateManager_.getLastConsentInstanceInfo();
       this.remoteConfigPromise_ = storeConsentPromise.then((storedInfo) => {
         // Note: Expect the request to look different in following versions.
-        const request = /** @type {!JsonObject} */ ({
+        const body = {
           'consentInstanceId': this.consentId_,
           'consentStateValue': getConsentStateValue(storedInfo['consentState']),
           'consentMetadata': storedInfo['consentMetadata'],
           'consentString': storedInfo['consentString'],
+          'tcfPolicyVersion': storedInfo['tcfPolicyVersion'],
           'isDirty': !!storedInfo['isDirty'],
           'matchedGeoGroup': this.matchedGeoGroup_,
-        });
-        if (this.isGranularConsentExperimentOn_) {
-          request['purposeConsents'] = storedInfo['purposeConsents'];
-        }
-        if (this.consentConfig_['clientConfig']) {
-          request['clientConfig'] = this.consentConfig_['clientConfig'];
-        }
+          'purposeConsents': storedInfo['purposeConsents'],
+          'clientConfig': this.consentConfig_['clientConfig'],
+        };
         const init = {
           credentials: 'include',
           method: 'POST',
-          body: request,
+          body,
         };
-        const href = this.consentConfig_['checkConsentHref'];
-        assertHttpsUrl(href, this.element);
+        assertHttpsUrl(checkConsentHref, this.element);
         const ampdoc = this.getAmpDoc();
         const sourceBase = getSourceUrl(ampdoc.getUrl());
-        const resolvedHref = resolveRelativeUrl(href, sourceBase);
+        const resolvedHref = resolveRelativeUrl(checkConsentHref, sourceBase);
         const xhrService = Services.xhrFor(this.win);
         return ampdoc.whenFirstVisible().then(() =>
           expandConsentEndpointUrl(this.element, resolvedHref).then(
@@ -788,9 +799,6 @@ export class AmpConsent extends AMP.BaseElement {
    * @return {!Promise<boolean>}
    */
   checkGranularConsentRequired_(consentInfo) {
-    if (!this.isGranularConsentExperimentOn_) {
-      return Promise.resolve(true);
-    }
     return this.getPurposeConsentRequired_().then((purposeConsentRequired) => {
       // True if there are no required purposes
       if (!purposeConsentRequired?.length) {
@@ -824,6 +832,7 @@ export class AmpConsent extends AMP.BaseElement {
    * @return {!Promise<?Array>}
    */
   getPurposeConsentRequired_() {
+    // TODO(alanorozco): once() this instead of using an instance property.
     if (this.purposeConsentRequired_) {
       return this.purposeConsentRequired_;
     }
@@ -866,10 +875,9 @@ export class AmpConsent extends AMP.BaseElement {
   initPromptUI_(isConsentRequired) {
     this.consentUI_ = new ConsentUI(
       this,
-      /** @type {!JsonObject} */ (devAssert(
-        this.consentConfig_,
-        'consent config not found'
-      ))
+      /** @type {!JsonObject} */ (
+        devAssert(this.consentConfig_, 'consent config not found')
+      )
     );
 
     // Get current consent state
@@ -958,7 +966,32 @@ export class AmpConsent extends AMP.BaseElement {
   }
 
   /**
-   * Convert valid opt_metadta into ConsentMetadataDef
+   * Check if the opt_tcfPolicyVersion provided is a valid number to use.
+   * @param {number=} opt_tcfPolicyVersion
+   * @return {number|undefined}
+   */
+  validateTCFPolicyVersion_(opt_tcfPolicyVersion) {
+    if (typeof opt_tcfPolicyVersion !== 'number') {
+      return;
+    }
+
+    if (
+      isNaN(opt_tcfPolicyVersion) ||
+      !isFinite(opt_tcfPolicyVersion) ||
+      opt_tcfPolicyVersion.toString().split('.').length > 1
+    ) {
+      user().error(
+        TAG,
+        'CMP tcfPolicyVersion must be a valid number (integer).'
+      );
+      return;
+    }
+
+    return opt_tcfPolicyVersion;
+  }
+
+  /**
+   * Convert valid opt_metadata into ConsentMetadataDef
    * @param {JsonObject=} opt_metadata
    * @return {ConsentMetadataDef|undefined}
    */
@@ -986,27 +1019,25 @@ export class AmpConsent extends AMP.BaseElement {
    * that the document supports the tcfPostMessage API.
    */
   maybeSetUpTcfPostMessageProxy_() {
-    if (
-      !this.isTcfPostMessageProxyExperimentOn_ ||
-      !this.consentConfig_['exposesTcfApi']
-    ) {
+    if (!this.consentConfig_['exposesTcfApi']) {
       return;
     }
-    // Check if __tcfApiLocator API already exists (dirty AMP)
-    if (!this.win.frames[TCF_API_LOCATOR]) {
-      this.tcfApiCommandManager_ = new TcfApiCommandManager(
-        this.consentPolicyManager_
-      );
-      // Add window listener for 3p iframe PostMessages
-      this.win.addEventListener('message', this.boundHandleIframeMessages_);
-
-      // Set up the __tcfApiLocator window to singal PostMessage support
-      const iframe = this.element.ownerDocument.createElement('iframe');
-      iframe.setAttribute('name', TCF_API_LOCATOR);
-      toggle(iframe, false);
-      iframe.setAttribute('aria-hidden', true);
-      this.element.appendChild(dev().assertElement(iframe));
+    // Bail if __tcfApiLocator API already exists (dirty AMP)
+    if (this.win.frames[TCF_API_LOCATOR]) {
+      return;
     }
+    this.tcfApiCommandManager_ = new TcfApiCommandManager(
+      this.consentPolicyManager_
+    );
+    // Add window listener for 3p iframe postMessages
+    this.win.addEventListener('message', (e) => this.handleTcfMessage_(e));
+
+    // Set up the __tcfApiLocator window to signal postMessage support
+    const iframe = this.element.ownerDocument.createElement('iframe');
+    iframe.setAttribute('name', TCF_API_LOCATOR);
+    iframe.setAttribute('aria-hidden', 'true');
+    toggle(iframe, false);
+    this.element.appendChild(dev().assertElement(iframe));
   }
 
   /**
@@ -1025,7 +1056,7 @@ export class AmpConsent extends AMP.BaseElement {
    *
    * @param {!Event} event
    */
-  handleIframeMessages_(event) {
+  handleTcfMessage_(event) {
     const data = getData(event);
 
     if (!data || !data['__tcfapiCall']) {

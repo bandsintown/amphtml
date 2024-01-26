@@ -1,29 +1,18 @@
-/**
- * Copyright 2020 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {DomBasedWeakRef} from '#core/data-structures/dom-based-weakref';
+import {childElement, childElementsByTag} from '#core/dom/query';
+import {tryPlay} from '#core/dom/video';
+import {toArray} from '#core/types/array';
 
-import {DomBasedWeakRef} from '../../../src/utils/dom-based-weakref';
-import {childElement, childElementsByTag} from '../../../src/dom';
-import {dev, devAssert} from '../../../src/log';
-import {isExperimentOn} from '../../../src/experiments';
-import {listen, listenOnce} from '../../../src/event-helper';
-import {toArray} from '../../../src/core/types/array';
+import {isExperimentOn} from '#experiments';
+
+import {Services} from '#service';
+
+import {listen, listenOnce} from '#utils/event-helper';
+import {dev, devAssert} from '#utils/log';
 
 const TAG = 'amp-video';
 
-/** @const {!Object<string, number>} */
+/** @const {!{[key: string]: number}} */
 const BITRATE_BY_EFFECTIVE_TYPE = {
   // We assign low values to 2G in general. None of these will likely be able
   // to stream any bitrates we see in the wild.
@@ -53,6 +42,11 @@ export function getBitrateManager(win) {
   if (instance) {
     return instance;
   }
+
+  if (isExperimentOn(win, 'flexible-bitrate')) {
+    Services.performanceFor(win).addEnabledExperiment('flexible-bitrate');
+  }
+
   return (instance = new BitrateManager(win));
 }
 
@@ -249,14 +243,14 @@ export class BitrateManager {
     video.pause();
     const hasChanges = this.sortSources_(video);
     if (!hasChanges) {
-      video.play();
+      tryPlay(video);
       return;
     }
     video.load();
     listenOnce(video, 'loadedmetadata', () => {
       // Restore currentTime after loading new source.
       video.currentTime = currentTime;
-      video.play();
+      tryPlay(video);
       dev().fine(TAG, 'Playing at lower bitrate %s', video.currentSrc);
     });
   }
@@ -316,12 +310,14 @@ function onNontrivialWait(video, callback) {
  * @return {?HTMLSourceElement}
  */
 function sources(video, fn) {
-  return /** @type {?HTMLSourceElement} */ (childElement(video, (source) => {
-    if (source.tagName != 'SOURCE') {
-      return false;
-    }
-    return fn(/** @type {!HTMLSourceElement} */ (source));
-  }));
+  return /** @type {?HTMLSourceElement} */ (
+    childElement(video, (source) => {
+      if (source.tagName != 'SOURCE') {
+        return false;
+      }
+      return fn(/** @type {!HTMLSourceElement} */ (source));
+    })
+  );
 }
 
 /**

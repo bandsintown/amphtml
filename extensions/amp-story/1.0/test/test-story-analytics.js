@@ -1,22 +1,9 @@
-/**
- * Copyright 2021 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import * as analytics from '#utils/analytics';
 
-import * as analytics from '../../../../src/analytics';
+import {getAmpdoc} from 'src/service-helpers';
+
 import {Action, getStoreService} from '../amp-story-store-service';
-import {StoryAnalyticsService} from '../story-analytics';
+import {getAnalyticsService} from '../story-analytics';
 
 describes.realWin('amp-story-analytics', {amp: true}, (env) => {
   let el;
@@ -25,11 +12,12 @@ describes.realWin('amp-story-analytics', {amp: true}, (env) => {
   beforeEach(() => {
     const {win} = env;
     el = win.document.createElement('amp-story');
+    win.document.body.appendChild(el);
     storeService = getStoreService(win);
-    new StoryAnalyticsService(env.win, el);
+    getAnalyticsService(win, el);
   });
 
-  it('sends story-page-visible on current page change', () => {
+  it('sends story-page-visible on current page change', async () => {
     const triggerAnalyticsStub = env.sandbox.stub(
       analytics,
       'triggerAnalyticsEvent'
@@ -38,6 +26,9 @@ describes.realWin('amp-story-analytics', {amp: true}, (env) => {
       id: 'page-1',
       index: 0,
     });
+
+    await getAmpdoc(env.win.document).whenFirstVisible();
+
     expect(triggerAnalyticsStub).to.have.been.calledOnceWithExactly(
       el,
       'story-page-visible',
@@ -58,7 +49,7 @@ describes.realWin('amp-story-analytics', {amp: true}, (env) => {
     expect(triggerAnalyticsStub).not.to.be.called;
   });
 
-  it('sends story-page-visible on content page after ad page', () => {
+  it('does not send story-page-visible before document becomes visible', async () => {
     const triggerAnalyticsStub = env.sandbox.stub(
       analytics,
       'triggerAnalyticsEvent'
@@ -67,6 +58,29 @@ describes.realWin('amp-story-analytics', {amp: true}, (env) => {
       id: 'page-1',
       index: 0,
     });
+    expect(triggerAnalyticsStub).not.to.be.called;
+
+    await getAmpdoc(env.win.document).whenFirstVisible();
+
+    expect(triggerAnalyticsStub).to.have.been.calledOnceWithExactly(
+      el,
+      'story-page-visible',
+      env.sandbox.match({storyPageIndex: 0, storyPageId: 'page-1'})
+    );
+  });
+
+  it('sends story-page-visible on content page after ad page', async () => {
+    const triggerAnalyticsStub = env.sandbox.stub(
+      analytics,
+      'triggerAnalyticsEvent'
+    );
+    storeService.dispatch(Action.CHANGE_PAGE, {
+      id: 'page-1',
+      index: 0,
+    });
+
+    await getAmpdoc(env.win.document).whenFirstVisible();
+
     expect(triggerAnalyticsStub).to.have.been.calledOnceWithExactly(
       el,
       'story-page-visible',
@@ -83,6 +97,9 @@ describes.realWin('amp-story-analytics', {amp: true}, (env) => {
       id: 'page-2',
       index: 2,
     });
+
+    await getAmpdoc(env.win.document).whenFirstVisible();
+
     expect(triggerAnalyticsStub).to.have.been.calledTwice;
     expect(triggerAnalyticsStub.secondCall).to.have.been.calledWithExactly(
       el,

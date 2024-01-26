@@ -1,23 +1,7 @@
-//
-// Copyright 2020 The AMP HTML Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the license.
-//
-
-#include "utf8-util.h"
+#include "cpp/engine/utf8-util.h"
 
 #include "gtest/gtest.h"
-#include "strings.h"
+#include "cpp/htmlparser/strings.h"
 
 using ::testing::Eq;
 
@@ -30,7 +14,7 @@ TEST(Utf8UtilTest, Utf16StrLen) {
   // It's 34 bytes long and 22 utf-8 characters long. Javascript uses UTF16
   // strings and string lengths.
   // The chars in Iñtërnâtiônàlizætiøn vary between 1 and 2 byte lengths, all
-  // javascript 1-char lenghts. The ⚡ is a 3-byte length character, with a
+  // javascript 1-char lengths. The ⚡ is a 3-byte length character, with a
   // 1-char javascript length. Finally the 💩 is a 4-byte length character with
   // a 2-char javascript length.
   EXPECT_EQ(Utf16StrLen("Iñtërnâtiônàlizætiøn☃💩"), 23);

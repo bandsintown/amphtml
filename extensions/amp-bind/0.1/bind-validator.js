@@ -1,28 +1,13 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {parseSrcset} from '#core/dom/srcset';
+import {hasOwn, ownProperty} from '#core/types/object';
 
-import {hasOwn, ownProperty} from '../../../src/core/types/object';
-import {parseSrcset} from '../../../src/srcset';
-import {user} from '../../../src/log';
+import {user} from '#utils/log';
 
 const TAG = 'amp-bind';
 
 /**
  * @typedef {{
- *   allowedProtocols: (!Object<string,boolean>|undefined),
+ *   allowedProtocols: (!{[key: string]: boolean}|undefined),
  *   alternativeName: (string|undefined),
  * }}
  */
@@ -30,7 +15,7 @@ let PropertyRulesDef;
 
 /**
  * Property rules that apply to any and all tags.
- * @private {Object<string, ?PropertyRulesDef>}
+ * @private {{[key: string]: ?PropertyRulesDef}}
  */
 const GLOBAL_PROPERTY_RULES = {
   'class': {
@@ -42,7 +27,7 @@ const GLOBAL_PROPERTY_RULES = {
 
 /**
  * Property rules that apply to all AMP elements.
- * @private {Object<string, ?PropertyRulesDef>}
+ * @private {{[key: string]: ?PropertyRulesDef}}
  */
 const AMP_PROPERTY_RULES = {
   'width': null,
@@ -53,13 +38,13 @@ const AMP_PROPERTY_RULES = {
  * Maps tag names to property names to PropertyRulesDef.
  * If `ELEMENT_RULES[tag][property]` is null, then all values are valid
  * for that property in that tag.
- * @private {Object<string, Object<string, ?PropertyRulesDef>>}}
+ * @private {{[key: string]: {[key: string]: ?PropertyRulesDef}}}}
  */
 const ELEMENT_RULES = createElementRules_();
 
 /**
  * Map whose keys comprise all properties that contain URLs.
- * @private {Object<string, boolean>}
+ * @private {{[key: string]: boolean}}
  */
 const URL_PROPERTIES = {
   'src': true,
@@ -214,7 +199,7 @@ export class BindValidator {
 }
 
 /**
- * @return {Object<string, Object<string, ?PropertyRulesDef>>}}
+ * @return {{[key: string]: {[key: string]: ?PropertyRulesDef}}}}
  * @private
  */
 function createElementRules_() {
@@ -377,6 +362,7 @@ function createElementRules_() {
           'fb-messenger': true,
           'intent': true,
           'line': true,
+          'microsoft-edge': true,
           'skype': true,
           'sms': true,
           'snapchat': true,

@@ -1,32 +1,18 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {CONSENT_POLICY_STATE} from '#core/constants/consent-state';
+import {Observable} from '#core/data-structures/observable';
+import {Deferred} from '#core/data-structures/promise';
+import {isFiniteNumber, isObject} from '#core/types';
+import {hasOwn, map} from '#core/types/object';
+
+import {user, userAssert} from '#utils/log';
 
 import {
   CONSENT_ITEM_STATE,
   ConsentInfoDef,
   PURPOSE_CONSENT_STATE,
 } from './consent-info';
-import {CONSENT_POLICY_STATE} from '../../../src/core/constants/consent-state';
-import {Deferred} from '../../../src/core/data-structures/promise';
-import {Observable} from '../../../src/core/data-structures/observable';
-import {getServicePromiseForDoc} from '../../../src/service';
-import {hasOwn, map} from '../../../src/core/types/object';
-import {isFiniteNumber} from '../../../src/types';
-import {isObject} from '../../../src/core/types';
-import {user, userAssert} from '../../../src/log';
+
+import {getServicePromiseForDoc} from '../../../src/service-helpers';
 
 const CONSENT_STATE_MANAGER = 'consentStateManager';
 const TAG = 'consent-policy-manager';
@@ -47,10 +33,10 @@ export class ConsentPolicyManager {
     /** @private {!../../../src/service/ampdoc-impl.AmpDoc} */
     this.ampdoc_ = ampdoc;
 
-    /** @private {!Object<string, ?Deferred>} */
+    /** @private {!{[key: string]: ?Deferred}} */
     this.policyInstancesDeferred_ = map();
 
-    /** @private {!Object<string, ConsentPolicyInstance>} */
+    /** @private {!{[key: string]: ConsentPolicyInstance}} */
     this.instances_ = map();
 
     /** @private {!Promise} */
@@ -81,6 +67,9 @@ export class ConsentPolicyManager {
 
     /** @private {?string} */
     this.consentString_ = null;
+
+    /** @private {?number} */
+    this.tcfPolicyVersion_ = null;
 
     /** @private {?Object|undefined} */
     this.consentMetadata_ = null;
@@ -193,15 +182,18 @@ export class ConsentPolicyManager {
   consentStateChangeHandler_(info) {
     const state = info['consentState'];
     const consentStr = info['consentString'];
+    const tcfPolicyVersion = info['tcfPolicyVersion'];
     const consentMetadata = info['consentMetadata'];
     const purposeConsents = info['purposeConsents'];
     const {
-      consentString_: prevConsentStr,
       consentMetadata_: prevConsentMetadata,
+      consentString_: prevConsentStr,
       purposeConsents_: prevPurposeConsents,
+      tcfPolicyVersion_: prevTCFPolicyVersion,
     } = this;
 
     this.consentString_ = consentStr;
+    this.tcfPolicyVersion_ = tcfPolicyVersion;
     this.consentMetadata_ = consentMetadata;
     this.purposeConsents_ = purposeConsents;
     if (state === CONSENT_ITEM_STATE.UNKNOWN) {
@@ -224,6 +216,7 @@ export class ConsentPolicyManager {
       }
       // None of the supplementary consent data changes with dismiss action
       this.consentString_ = prevConsentStr;
+      this.tcfPolicyVersion_ = prevTCFPolicyVersion;
       this.consentMetadata_ = prevConsentMetadata;
       this.purposeConsents_ = prevPurposeConsents;
     } else {
@@ -320,6 +313,18 @@ export class ConsentPolicyManager {
   }
 
   /**
+   * Get the tcf policy version of a policy. Return a promise that resolves
+   * when the policy resolves.
+   * @param {string} policyId
+   * @return {!Promise<?number>}
+   */
+  getTcfPolicyVersion(policyId) {
+    return this.whenPolicyResolved(policyId).then(() => {
+      return this.tcfPolicyVersion_;
+    });
+  }
+
+  /**
    * Get the consent metadata value of a policy. Return a promise that resolves
    * when the policy resolves.
    * @param {string} policyId
@@ -367,8 +372,9 @@ export class ConsentPolicyManager {
     if (!this.policyInstancesDeferred_[policyId]) {
       this.policyInstancesDeferred_[policyId] = new Deferred();
     }
-    return /** @type {!Promise} */ (this.policyInstancesDeferred_[policyId]
-      .promise);
+    return /** @type {!Promise} */ (
+      this.policyInstancesDeferred_[policyId].promise
+    );
   }
 }
 

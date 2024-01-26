@@ -1,27 +1,11 @@
-/**
- * Copyright 2019 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 // import to install chromedriver and geckodriver
 require('chromedriver');
 require('geckodriver');
 
 const argv = require('minimist')(process.argv.slice(2));
 const chrome = require('selenium-webdriver/chrome');
-const fetch = require('node-fetch');
 const firefox = require('selenium-webdriver/firefox');
-const selenium = require('selenium-webdriver');
+const {Builder, logging} = require('selenium-webdriver');
 const {
   clearLastExpectError,
   getLastExpectError,
@@ -31,15 +15,17 @@ const {
   SeleniumWebDriverController,
 } = require('./selenium-webdriver-controller');
 const {AmpDriver, AmpdocEnvironment} = require('./amp-driver');
+const {configureHelpers} = require('../../../testing/helpers');
 const {HOST, PORT} = require('../serve');
 const {installRepl, uninstallRepl} = require('./repl');
 const {isCiBuild} = require('../../common/ci');
-const {Builder, Capabilities, logging} = selenium;
 
 /** Should have something in the name, otherwise nothing is shown. */
 const SUB = ' ';
-const TEST_TIMEOUT = 40000;
-const SETUP_TIMEOUT = 30000;
+const TEST_TIMEOUT = 3000;
+// This can be much lower when the OSX container can be sped up allowing tests
+// in extensions/amp-script/0.1/test-e2e/test-amp-script.js to run faster
+const SETUP_TIMEOUT = 10000;
 const SETUP_RETRIES = 3;
 const DEFAULT_E2E_INITIAL_RECT = {width: 800, height: 600};
 const COV_REPORT_PATH = '/coverage/client';
@@ -53,6 +39,9 @@ if (argv.coverage) {
   istanbulMiddleware = require('istanbul-middleware/lib/core');
 }
 
+/** @typedef {import('selenium-webdriver').WebDriver} WebDriver */
+/** @typedef {"chrome" | "firefox" | "safari"} BrowserNameDef */
+
 /**
  * @typedef {{
  *  browsers: string,
@@ -60,13 +49,6 @@ if (argv.coverage) {
  * }}
  */
 let DescribesConfigDef;
-
-/**
- * @typedef {{
- *  headless?: boolean,
- * }}
- */
-let PuppeteerConfigDef;
 
 /**
  * @typedef {{
@@ -107,10 +89,10 @@ function getConfig() {
 
 /**
  * Configure and launch a Selenium instance
- * @param {string} browserName
+ * @param {BrowserNameDef} browserName
  * @param {!SeleniumConfigDef=} args
  * @param {string=} deviceName
- * @return {!selenium.WebDriver}
+ * @return {!WebDriver}
  */
 function createSelenium(browserName, args = {}, deviceName) {
   switch (browserName) {
@@ -120,24 +102,18 @@ function createSelenium(browserName, args = {}, deviceName) {
     case 'firefox':
       return createDriver(browserName, getFirefoxArgs(args), deviceName);
     case 'chrome':
-    default:
       return createDriver(browserName, getChromeArgs(args), deviceName);
   }
 }
 
 /**
  *
- * @param {string} browserName
+ * @param {BrowserNameDef} browserName
  * @param {!string[]} args
  * @param {string=} deviceName
- * @return {!selenium.WebDriver}
+ * @return {!WebDriver}
  */
 function createDriver(browserName, args, deviceName) {
-  const capabilities = Capabilities[browserName]();
-
-  const prefs = new logging.Preferences();
-  prefs.setLevel(logging.Type.PERFORMANCE, logging.Level.ALL);
-  capabilities.setLoggingPrefs(prefs);
   switch (browserName) {
     case 'firefox':
       const firefoxOptions = new firefox.Options();
@@ -150,19 +126,27 @@ function createDriver(browserName, args, deviceName) {
         .forBrowser('firefox')
         .setFirefoxOptions(firefoxOptions)
         .build();
+
     case 'chrome':
-      const chromeOptions = new chrome.Options(capabilities);
-      chromeOptions.addArguments(args);
+      const loggingPrefs = new logging.Preferences();
+      loggingPrefs.setLevel(logging.Type.PERFORMANCE, logging.Level.ALL);
+
+      const chromeOptions = new chrome.Options();
+      chromeOptions.setLoggingPrefs(loggingPrefs);
+      chromeOptions.addArguments(...args);
+      if (process.env.CHROME_BIN) {
+        chromeOptions.setChromeBinaryPath(process.env.CHROME_BIN);
+      }
       if (deviceName) {
         chromeOptions.setMobileEmulation({deviceName});
       }
-      const driver = chrome.Driver.createSession(chromeOptions);
-      //TODO(estherkim): workaround. `onQuit()` was added in selenium-webdriver v4.0.0-alpha.5
-      //which is also when `Server terminated early with status 1` began appearing. Coincidence? Maybe.
-      driver.onQuit = null;
-      return driver;
+      return new Builder()
+        .forBrowser('chrome')
+        .setChromeOptions(chromeOptions)
+        .build();
+
     case 'safari':
-      return new Builder().forBrowser(browserName).build();
+      return new Builder().forBrowser('safari').build();
   }
 }
 
@@ -204,6 +188,7 @@ function getFirefoxArgs(config) {
  * @typedef {{
  *  browsers: (!Array<string>|undefined),
  *  environments: (!Array<!AmpdocEnvironment>|undefined),
+ *  experiments: (!Array<string>|undefined),
  *  testUrl: string|undefined,
  *  fixture: string,
  *  initialRect: ({width: number, height:number}|undefined),
@@ -221,7 +206,8 @@ let TestSpec;
  *  fixture: string,
  *  initialRect: ({width: number, height:number}|undefined),
  *  deviceName: string|undefined,
- *  versions: {[version: string]: TestSpec}
+ *  versions: {[version: string]: TestSpec},
+ *  version: string|undefined
  * }}
  */
 let RootSpec;
@@ -296,7 +282,7 @@ envPresets['ampdoc-amp4ads-preset'] = envPresets['ampdoc-preset'].concat(
 class ItConfig {
   /**
    * @param {function} it
-   * @param {Object} env
+   * @param {object} env
    */
   constructor(it, env) {
     this.it = /** @type {Mocha.it} */ (it);
@@ -412,9 +398,11 @@ function describeEnv(factory) {
       spec.browsers = ['chrome'];
     }
 
+    /**
+     * Initializes the describe object for all applicable browsers.
+     */
     function createBrowserDescribe() {
       const allowedBrowsers = getAllowedBrowsers();
-
       spec.browsers
         .filter((x) => allowedBrowsers.has(x))
         .forEach((browserName) => {
@@ -443,7 +431,7 @@ function describeEnv(factory) {
     }
 
     /**
-     * @param {string} browserName
+     * @param {BrowserNameDef} browserName
      */
     function createVariantDescribe(browserName) {
       for (const name in variants) {
@@ -465,14 +453,16 @@ function describeEnv(factory) {
     /**
      *
      * @param {string} _name
-     * @param {Object} variant
-     * @param {string} browserName
+     * @param {object} variant
+     * @param {BrowserNameDef} browserName
      */
     function doTemplate(_name, variant, browserName) {
       const env = Object.create(variant);
+      // @ts-ignore
       this.timeout(TEST_TIMEOUT);
       beforeEach(async function () {
         this.timeout(SETUP_TIMEOUT);
+        configureHelpers(env);
         await fixture.setup(env, browserName, SETUP_RETRIES);
 
         // don't install for CI
@@ -489,7 +479,7 @@ function describeEnv(factory) {
         // If there is an async expect error, throw it in the final state.
         const lastExpectError = getLastExpectError();
         if (lastExpectError) {
-          this.test.error(lastExpectError);
+          /** @type {any} */ (this.test).error(lastExpectError);
           clearLastExpectError();
         }
 
@@ -578,8 +568,9 @@ class EndToEndFixture {
 
   /**
    * @param {!Object} env
-   * @param {string} browserName
+   * @param {BrowserNameDef} browserName
    * @param {number} retries
+   * @return {Promise<void>}
    */
   async setup(env, browserName, retries = 0) {
     const config = getConfig();
@@ -597,7 +588,7 @@ class EndToEndFixture {
       // Set env props that require the fixture to be set up.
       if (env.environment === AmpdocEnvironment.VIEWER_DEMO) {
         env.receivedMessages = await controller.evaluate(() => {
-          return window.parent.viewer.receivedMessages;
+          return window.parent.viewer?.receivedMessages;
         });
       }
     } catch (ex) {
@@ -627,7 +618,7 @@ class EndToEndFixture {
    * @return {!TestSpec}
    */
   setTestUrl(spec) {
-    const {testUrl, fixture} = spec;
+    const {fixture, testUrl} = spec;
 
     if (testUrl) {
       throw new Error(
@@ -645,9 +636,9 @@ class EndToEndFixture {
 /**
  * Get the driver for the configured engine.
  * @param {!DescribesConfigDef} describesConfig
- * @param {string} browserName
+ * @param {BrowserNameDef} browserName
  * @param {string|undefined} deviceName
- * @return {!selenium.WebDriver}
+ * @return {!WebDriver}
  */
 function getDriver({headless = false}, browserName, deviceName) {
   return createSelenium(browserName, {headless}, deviceName);
@@ -663,8 +654,8 @@ function getDriver({headless = false}, browserName, deviceName) {
  * @return {Promise<void>}
  */
 async function setUpTest(
-  {environment, ampDriver, controller},
-  {testUrl, version, experiments = [], initialRect}
+  {ampDriver, controller, environment},
+  {experiments = [], initialRect, testUrl = '', version}
 ) {
   const url = new URL(testUrl);
 
@@ -685,7 +676,7 @@ async function setUpTest(
   }
 
   if (initialRect) {
-    const {width, height} = initialRect;
+    const {height, width} = initialRect;
     await controller.setWindowRect({width, height});
   }
 

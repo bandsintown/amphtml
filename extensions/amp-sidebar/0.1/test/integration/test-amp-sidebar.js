@@ -1,31 +1,11 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {poll} from '#testing/iframe';
 
-import {poll} from '../../../../../testing/iframe';
+describes.sandboxed('amp-sidebar', {}, function () {
+  // Extend timeout slightly for flakes on Windows environments
+  this.timeout(4000);
+  const extensions = ['amp-sidebar'];
 
-describe
-  .configure()
-  .skipSafari()
-  .skipEdge()
-  .run('amp-sidebar', function () {
-    // Extend timeout slightly for flakes on Windows environments
-    this.timeout(4000);
-    const extensions = ['amp-sidebar'];
-
-    const sidebarBody = `
+  const sidebarBody = `
   <amp-sidebar
     id="sidebar1"
     layout="nodisplay"
@@ -50,72 +30,61 @@ describe
 
   <div id="dummy"></div>
   `;
-    describes.integration(
-      'sidebar focus',
-      {
-        body: sidebarBody,
-        extensions,
-      },
-      (env) => {
-        let win;
-        beforeEach(() => {
-          win = env.win;
-        });
+  describes.integration(
+    'sidebar focus',
+    {
+      body: sidebarBody,
+      extensions,
+    },
+    (env) => {
+      let win;
+      beforeEach(() => {
+        win = env.win;
+      });
 
-        // TODO (#16157, #21999): this tests times out on FF and Chrome
-        it.configure()
-          .skipChrome()
-          .skipFirefox()
-          .run('should focus on opener on close', () => {
-            const openerButton = win.document.getElementById('sidebarOpener');
-            const openedPromise = waitForSidebarOpen(win.document);
-            openerButton.click();
-            return openedPromise
-              .then(() => {
-                const closerButton = win.document.getElementById(
-                  'sidebarCloser'
-                );
-                const closedPromise = waitForSidebarClose(win.document);
-                closerButton.click();
-                return closedPromise;
-              })
-              .then(() => {
-                expect(win.document.activeElement).to.equal(openerButton);
-              });
+      it('should focus on opener on close', () => {
+        const openerButton = win.document.getElementById('sidebarOpener');
+        const openedPromise = waitForSidebarOpen(win.document);
+        openerButton.click();
+        return openedPromise
+          .then(() => {
+            const closerButton = win.document.getElementById('sidebarCloser');
+            const closedPromise = waitForSidebarClose(win.document);
+            closerButton.click();
+            return closedPromise;
+          })
+          .then(() => {
+            expect(win.document.activeElement).to.equal(openerButton);
           });
+      });
 
-        it.configure()
-          .skipIfPropertiesObfuscated()
-          .skipFirefox()
-          .run('should not change scroll position after close', async () => {
-            const openerButton = win.document.getElementById('sidebarOpener');
-            const sidebar = win.document.getElementById('sidebar1');
-            const impl = await sidebar.getImpl(false);
-            const viewport = impl.getViewport();
-            const openedPromise = waitForSidebarOpen(win.document);
-            openerButton.click();
-            expect(viewport.getScrollTop()).to.equal(0);
-            return openedPromise
-              .then(() => {
-                viewport.setScrollTop(1000);
-                expect(viewport.getScrollTop()).to.equal(1000);
-                const closerButton = win.document.getElementById(
-                  'sidebarCloser'
-                );
-                const closedPromise = waitForSidebarClose(win.document);
-                closerButton.click();
-                return closedPromise;
-              })
-              .then(() => {
-                // Firefox resets scroll to top on pop history
-                // Safari resets scroll to top somewhere unrelated to focus
-                // expect(viewport.getScrollTop()).to.equal(1000);
-                expect(win.document.activeElement).to.not.equal(openerButton);
-              });
+      it('should not change scroll position after close', async () => {
+        const openerButton = win.document.getElementById('sidebarOpener');
+        const sidebar = win.document.getElementById('sidebar1');
+        const impl = await sidebar.getImpl(false);
+        const viewport = impl.getViewport();
+        const openedPromise = waitForSidebarOpen(win.document);
+        openerButton.click();
+        expect(viewport.getScrollTop()).to.equal(0);
+        return openedPromise
+          .then(() => {
+            viewport.setScrollTop(1000);
+            expect(viewport.getScrollTop()).to.equal(1000);
+            const closerButton = win.document.getElementById('sidebarCloser');
+            const closedPromise = waitForSidebarClose(win.document);
+            closerButton.click();
+            return closedPromise;
+          })
+          .then(() => {
+            // Firefox resets scroll to top on pop history
+            // Safari resets scroll to top somewhere unrelated to focus
+            // expect(viewport.getScrollTop()).to.equal(1000);
+            expect(win.document.activeElement).to.not.equal(openerButton);
           });
-      }
-    );
-  });
+      });
+    }
+  );
+});
 
 function waitForSidebarOpen(document) {
   return poll('wait for sidebar to open', () => {

@@ -1,32 +1,18 @@
-/**
- * Copyright 2021 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-import * as Preact from '../../../src/preact';
-import {Option, Selector} from './component';
-import {PreactBaseElement} from '../../../src/preact/base-element';
+import {devAssert} from '#core/assert/dev';
 import {
-  closestAncestorElementBySelector,
   createElementWithAttributes,
   toggleAttribute,
   tryFocus,
-} from '../../../src/dom';
-import {devAssert} from '../../../src/log';
-import {dict} from '../../../src/core/types/object';
-import {toArray} from '../../../src/core/types/array';
-import {useCallback, useLayoutEffect, useRef} from '../../../src/preact';
+} from '#core/dom';
+import {closestAncestorElementBySelector} from '#core/dom/query';
+import {toArray} from '#core/types/array';
+
+import * as Preact from '#preact';
+import {useCallback, useLayoutEffect, useRef} from '#preact';
+import {PreactBaseElement} from '#preact/base-element';
+import {tabindexFromProps} from '#preact/utils';
+
+import {BentoSelector, BentoSelectorOption} from './component';
 
 export class BaseElement extends PreactBaseElement {
   /** @override */
@@ -54,30 +40,26 @@ export class BaseElement extends PreactBaseElement {
     // See https://github.com/ampproject/amp-react-prototype/issues/40.
     const onChangeHandler = (event) => {
       const {option, value} = event;
-      this.triggerEvent(
-        this.element,
-        'select',
-        dict({
-          'targetOption': option,
-          'selectedOptions': value,
-        })
-      );
+      this.triggerEvent(this.element, 'select', {
+        'targetOption': option,
+        'selectedOptions': value,
+      });
 
       this.isExpectedMutation = true;
-      this.mutateProps(dict({'value': value}));
+      this.mutateProps({'value': value});
     };
 
     // Return props
-    const {children, value, options} = getOptions(element, mu);
+    const {children, options, value} = getOptions(element, mu);
     this.optionState = options;
-    return dict({
+    return {
       'as': SelectorShim,
       'shimDomElement': element,
       'children': children,
       'value': value,
       'options': options,
       'onChange': onChangeHandler,
-    });
+    };
   }
 }
 
@@ -104,13 +86,12 @@ function getOptions(element, mu) {
       const option = child.getAttribute('option') || index.toString();
       const selected = child.hasAttribute('selected');
       const disabled = child.hasAttribute('disabled');
-      const tabIndex = child.getAttribute('tabindex');
       const props = {
         as: OptionShim,
         option,
         disabled,
         index,
-        onFocus: () => tryFocus(child),
+        focus: () => tryFocus(child),
         role: child.getAttribute('role') || 'option',
         shimDomElement: child,
         // TODO(wg-bento): This implementation causes infinite loops on DOM mutation.
@@ -120,12 +101,16 @@ function getOptions(element, mu) {
           mu.takeRecords();
         },
         selected,
-        tabIndex,
       };
       if (selected) {
         value.push(option);
       }
-      const optionChild = <Option {...props} />;
+      const optionChild = (
+        <BentoSelectorOption
+          {...props}
+          tabindex={child.getAttribute('tabindex')}
+        />
+      );
       options.push(option);
       children.push(optionChild);
     });
@@ -133,19 +118,20 @@ function getOptions(element, mu) {
 }
 
 /**
- * @param {!SelectorDef.OptionProps} props
+ * @param {!BentoSelectorDef.OptionProps} props
  * @return {PreactDef.Renderable}
  */
 export function OptionShim({
-  shimDomElement,
+  disabled,
   onClick,
   onFocus,
   onKeyDown,
-  selected,
-  disabled,
   role = 'option',
-  tabIndex,
+  selected,
+  shimDomElement,
+  ...rest
 }) {
+  const tabindex = tabindexFromProps(rest);
   const syncEvent = useCallback(
     (type, handler) => {
       if (!handler) {
@@ -159,10 +145,10 @@ export function OptionShim({
 
   useLayoutEffect(() => syncEvent('click', onClick), [onClick, syncEvent]);
   useLayoutEffect(() => syncEvent('focus', onFocus), [onFocus, syncEvent]);
-  useLayoutEffect(() => syncEvent('keydown', onKeyDown), [
-    onKeyDown,
-    syncEvent,
-  ]);
+  useLayoutEffect(
+    () => syncEvent('keydown', onKeyDown),
+    [onKeyDown, syncEvent]
+  );
 
   useLayoutEffect(() => {
     toggleAttribute(shimDomElement, 'selected', !!selected);
@@ -178,30 +164,31 @@ export function OptionShim({
   }, [shimDomElement, role]);
 
   useLayoutEffect(() => {
-    if (tabIndex != undefined) {
-      shimDomElement.tabIndex = tabIndex;
+    if (tabindex != undefined) {
+      shimDomElement.setAttribute('tabindex', tabindex);
     }
-  }, [shimDomElement, tabIndex]);
+  }, [shimDomElement, tabindex]);
 
   return <div></div>;
 }
 
 /**
- * @param {!SelectorDef.Props} props
+ * @param {!BentoSelectorDef.Props} props
  * @return {PreactDef.Renderable}
  */
 function SelectorShim({
-  shimDomElement,
   children,
+  disabled,
   form,
   multiple,
   name,
-  disabled,
   onKeyDown,
   role = 'listbox',
-  tabIndex,
+  shimDomElement,
   value,
+  ...rest
 }) {
+  const tabindex = tabindexFromProps(rest);
   const input = useRef(null);
   if (!input.current) {
     input.current = createElementWithAttributes(
@@ -255,16 +242,16 @@ function SelectorShim({
   }, [shimDomElement, role]);
 
   useLayoutEffect(() => {
-    if (tabIndex != undefined) {
-      shimDomElement.tabIndex = tabIndex;
+    if (tabindex != undefined) {
+      shimDomElement.setAttribute('tabindex', tabindex);
     }
-  }, [shimDomElement, tabIndex]);
+  }, [shimDomElement, tabindex]);
 
   return <div children={children} />;
 }
 
 /** @override */
-BaseElement['Component'] = Selector;
+BaseElement['Component'] = BentoSelector;
 
 /** @override */
 BaseElement['detached'] = true;
@@ -276,6 +263,6 @@ BaseElement['props'] = {
   'multiple': {attr: 'multiple', type: 'boolean'},
   'name': {attr: 'name'},
   'role': {attr: 'role'},
-  'tabIndex': {attr: 'tabindex'},
+  'tabindex': {attr: 'tabindex'},
   'keyboardSelectMode': {attr: 'keyboard-select-mode', media: true},
 };

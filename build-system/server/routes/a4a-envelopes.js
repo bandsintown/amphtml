@@ -1,21 +1,4 @@
-/**
- * Copyright 2019 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 const express = require('express');
-const fetch = require('node-fetch');
 const fs = require('fs');
 const {getServeMode, replaceUrls} = require('../app-utils');
 const {log} = require('../../common/logging');
@@ -138,14 +121,14 @@ function getInaboxUrl(req, extraExperiment) {
  * If the URL does not return text, returns null.
  * @param {string} template
  * @param {string} url
- * @param {Object} query
+ * @param {object} query
  * @return {!Promise<?string>}
  */
 async function requestFromUrl(template, url, query) {
   const response = await fetch(url);
   if (
     !response.headers.has('Content-Type') ||
-    response.headers.get('Content-Type').startsWith('text/html')
+    response.headers.get('Content-Type')?.startsWith('text/html')
   ) {
     return fillTemplate(template, url, query, await response.text());
   }
@@ -156,7 +139,7 @@ async function requestFromUrl(template, url, query) {
  * Fill out a template with some common variables.
  * @param {string} template
  * @param {string} url
- * @param {Object} query
+ * @param {object} query
  * @param {string=} body
  * @return {string}
  */

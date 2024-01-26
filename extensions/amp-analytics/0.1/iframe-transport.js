@@ -1,29 +1,19 @@
-/**
- * Copyright 2017 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {createElementWithAttributes} from '#core/dom';
+import {toggle} from '#core/dom/style';
+import * as mode from '#core/mode';
+import {hasOwn} from '#core/types/object';
+
+import {devAssert, user} from '#utils/log';
 
 import {IframeTransportMessageQueue} from './iframe-transport-message-queue';
-import {createElementWithAttributes} from '../../../src/dom';
-import {devAssert, user} from '../../../src/log';
-import {getMode} from '../../../src/mode';
-import {hasOwn} from '../../../src/core/types/object';
-import {internalRuntimeVersion} from '../../../src/internal-version';
-import {toggle} from '../../../src/style';
-import {urls} from '../../../src/config';
 
-/** @private @const {string} */
+import * as urls from '../../../src/config/urls';
+import {getMode} from '../../../src/mode';
+
+/**
+ * @type {string}
+ * @private @const
+ */
 const TAG_ = 'amp-analytics/iframe-transport';
 
 /** @private @const {number} */
@@ -67,10 +57,7 @@ function getIframeTransportScriptUrl(ampWin, opt_forceProdUrl) {
     const loc = ampWin.parent.location;
     return `${loc.protocol}//${loc.host}/dist/iframe-transport-client-lib.js`;
   }
-  return (
-    urls.thirdParty +
-    `/${internalRuntimeVersion()}/iframe-transport-client-v0.js`
-  );
+  return urls.thirdParty + `/${mode.version()}/iframe-transport-client-v0.js`;
 }
 
 /**
@@ -199,30 +186,29 @@ export class IframeTransport {
     if (!isLongTaskApiSupported(this.ampWin_)) {
       return;
     }
-    IframeTransport.performanceObservers_[
-      this.type_
-    ] = new this.ampWin_.PerformanceObserver((entryList) => {
-      if (!entryList) {
-        return;
-      }
-      entryList.getEntries().forEach((entry) => {
-        if (
-          entry &&
-          entry['entryType'] == 'longtask' &&
-          entry['name'] == 'cross-origin-descendant' &&
-          entry.attribution
-        ) {
-          /** @type {!Array} */ (entry.attribution).forEach((attrib) => {
-            if (
-              this.frameUrl_ == attrib['containerSrc'] &&
-              ++this.numLongTasks_ % LONG_TASK_REPORTING_THRESHOLD == 0
-            ) {
-              user().error(TAG_, `Long Task: Vendor: "${this.type_}"`);
-            }
-          });
+    IframeTransport.performanceObservers_[this.type_] =
+      new this.ampWin_.PerformanceObserver((entryList) => {
+        if (!entryList) {
+          return;
         }
+        entryList.getEntries().forEach((entry) => {
+          if (
+            entry &&
+            entry['entryType'] == 'longtask' &&
+            entry['name'] == 'cross-origin-descendant' &&
+            entry.attribution
+          ) {
+            /** @type {!Array} */ (entry.attribution).forEach((attrib) => {
+              if (
+                this.frameUrl_ == attrib['containerSrc'] &&
+                ++this.numLongTasks_ % LONG_TASK_REPORTING_THRESHOLD == 0
+              ) {
+                user().error(TAG_, `Long Task: Vendor: "${this.type_}"`);
+              }
+            });
+          }
+        });
       });
-    });
     IframeTransport.performanceObservers_[this.type_].observe({
       entryTypes: ['longtask'],
     });
@@ -294,9 +280,7 @@ export class IframeTransport {
         this.creativeId_
     );
     frameData.queue.enqueue(
-      /**
-       * @type {!../../../src/3p-frame-messaging.IframeTransportEvent}
-       */
+      /** @type {!IframeTransportEventDef} */
       ({creativeId: this.creativeId_, message: event})
     );
   }
@@ -349,11 +333,11 @@ export function isLongTaskApiSupported(win) {
   );
 }
 
-/** @private {Object<string, FrameData>} */
+/** @private {{[key: string]: FrameData}} */
 IframeTransport.crossDomainIframes_ = {};
 
 /** @private {number} */
 IframeTransport.nextId_ = 0;
 
-/** @private {Object<string, PerformanceObserver>} */
+/** @private {{[key: string]: PerformanceObserver}} */
 IframeTransport.performanceObservers_ = {};

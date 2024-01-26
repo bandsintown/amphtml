@@ -14,20 +14,21 @@
  * limitations under the License.
  */
 
-import {computeInMasterFrame, loadScript, validateData} from '../../3p/3p';
-import {parseJson} from '../../src/json';
-import {setStyle, setStyles} from '../../src/style';
+import {computeInMasterFrame, loadScript, validateData} from '#3p/3p';
+
+import {setStyle, setStyles} from '#core/dom/style';
+import {parseJson} from '#core/types/object/json';
 
 /*
  * How to develop:
- * https://github.com/ampproject/amphtml/blob/main/contributing/getting-started-e2e.md
+ * https://github.com/ampproject/amphtml/blob/main/docs/getting-started-e2e.md
  */
 
 /**
  * @param {!Array.<!Object>} array
  * @param {!Function} iteratee
  *
- * @return {Object}
+ * @return {object}
  */
 export function keyBy(array, iteratee) {
   return array.reduce(
@@ -52,7 +53,7 @@ export function runWhenFetchingSettled(fetchingSSPs, cb) {
 /**
  * @param {!Element} element
  * @param {boolean} center
- * @param {Object} dimensions
+ * @param {object} dimensions
  */
 export function handlePosition(element, center, dimensions) {
   const styles = {
@@ -117,7 +118,7 @@ export function forceElementReflow(element) {
  */
 export function ssp(global, data) {
   // validate AMP input data- attributes
-  validateData(data, ['position'], ['site']);
+  validateData(data, ['position'], ['site', 'said']);
 
   let position = {id: -1};
 
@@ -169,6 +170,7 @@ export function ssp(global, data) {
 
         sssp.config({
           site: data.site || global.context.canonicalUrl,
+          said: data.said || null,
         });
 
         // propagate relevant data across all ad units
@@ -198,7 +200,6 @@ export function ssp(global, data) {
         // todo on SSP side (option to register error callback)
         // requestErrorCallback: () => {},
         AMPcallback: (ads) => {
-          /** @suppress {checkTypes} */
           const adById = keyBy(ads, (item) => item.id);
           const ad = adById[position['id']];
 
@@ -213,7 +214,7 @@ export function ssp(global, data) {
             }
 
             // listen to intersections and force element reflow (external DSPs)
-            if (['APPNEXUS', 'PUBMATIC'].includes(ad.dsp)) {
+            if (['APPNEXUS', 'PUBMATIC', 'PUBMATIC2'].includes(ad.dsp)) {
               global.context.observeIntersection(() => {
                 forceElementReflow(parentElement);
               });

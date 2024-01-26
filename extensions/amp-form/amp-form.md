@@ -4,25 +4,10 @@ formats:
   - websites
   - ads
   - email
+  - stories
 teaser:
   text: Allows you to create forms to submit input fields in an AMP document.
 ---
-
-<!---
-Copyright 2017 The AMP HTML Authors. All Rights Reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS-IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
--->
 
 # amp-form
 
@@ -113,7 +98,7 @@ Before creating a `<form>`, you must include the required script for the `<amp-f
 
 [/filter]<!-- formats="email" -->
 
-(Relaxing some of these rules might be reconsidered in the future - [please let us know](https://github.com/ampproject/amphtml/blob/main/CONTRIBUTING.md#suggestions-and-feature-requests) if you require these and provide use cases).
+(Relaxing some of these rules might be reconsidered in the future - [please let us know](https://github.com/ampproject/amphtml/blob/main/docs/contributing.md#suggestions-and-feature-requests) if you require these and provide use cases).
 
 For details on valid inputs and fields, see [amp-form rules](https://github.com/ampproject/amphtml/blob/main/validator/validator-main.protoascii) in the AMP validator specification.
 
@@ -121,11 +106,25 @@ For details on valid inputs and fields, see [amp-form rules](https://github.com/
 
 You can render success or error responses in your form by using [amp-mustache](../amp-mustache/amp-mustache.md), or success responses through data binding with [amp-bind](../amp-bind/amp-bind.md) and the following response attributes:
 
+[filter formats="websites, ads"]
+
 | Response attribute | Description                                                                                                                                                                                                                                                            |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `submit-success`   | Can be used to display a success message if the response is successful (i.e., has a status of `2XX`).                                                                                                                                                                  |
 | `submit-error`     | Can be used to display a submission error if the response is unsuccessful (i.e., does not have a status of `2XX`).                                                                                                                                                     |
 | `submitting`       | Can be used to display a message when the form is submitting. The template for this attribute has access to the form's input fields for any display purposes. Please see the [full form example below](#example-submitting) for how to use the `submitting` attribute. |
+
+[/filter]<!-- formats="websites, ads" -->
+
+[filter formats="email"]
+
+| Response attribute | Description                                                                                                                                                            |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `submit-success`   | Can be used to display a success message if the response is successful (i.e., has a status of `2XX`).                                                                  |
+| `submit-error`     | Can be used to display a submission error if the response is unsuccessful (i.e., does not have a status of `2XX`).                                                     |
+| `submitting`       | Can be used to display a message when the form is submitting. Please see the [full form example below](#example-submitting) for how to use the `submitting` attribute. |
+
+[/filter]<!-- formats="email" -->
 
 #### To render responses with templating:
 
@@ -140,6 +139,8 @@ When using `<amp-form>` in tandem with another templating AMP component, such as
 <a id="example-submitting"></a>
 
 In the following example, the responses are rendered in an inline template inside the form.
+
+[filter formats="websites, ads"]
 
 ```html
 <form ...>
@@ -166,6 +167,36 @@ In the following example, the responses are rendered in an inline template insid
   </div>
 </form>
 ```
+
+[/filter]<!-- formats="websites, ads" -->
+
+[filter formats="email"]
+
+```html
+<form ...>
+  <fieldset>
+    <input type="text" name="firstName" />
+    ...
+  </fieldset>
+  <div submitting>
+    Form submitting... Thank you for waiting.
+  </div>
+  <div submit-success>
+    <template type="amp-mustache">
+      Success! Thanks {{name}} for subscribing! Please make sure to check your
+      email {{email}} to confirm! After that we'll start sending you weekly
+      articles on {{#interests}}<b>{{name}}</b> {{/interests}}.
+    </template>
+  </div>
+  <div submit-error>
+    <template type="amp-mustache">
+      Oops! {{name}}, {{message}}.
+    </template>
+  </div>
+</form>
+```
+
+[/filter]<!-- formats="email" -->
 
 The publisher's `action-xhr` endpoint returns the following JSON responses:
 
@@ -434,7 +465,7 @@ For more examples, see [examples/forms.amp.html](../../examples/forms.amp.html).
 
 ### Variable substitutions
 
-The `amp-form` extension allows [platform variable substitutions](../../spec/amp-var-substitutions.md) for inputs that are hidden and that have the `data-amp-replace` attribute. On each form submission, `amp-form` finds all `input[type=hidden][data-amp-replace]` inside the form and applies variable substitutions to its `value` attribute and replaces it with the result of the substitution.
+The `amp-form` extension allows [platform variable substitutions](../../docs/spec/amp-var-substitutions.md) for inputs that are hidden and that have the `data-amp-replace` attribute. On each form submission, `amp-form` finds all `input[type=hidden][data-amp-replace]` inside the form and applies variable substitutions to its `value` attribute and replaces it with the result of the substitution.
 
 You must provide the variables you are using for each substitution on each input by specifying a space-separated string of the variables used in `data-amp-replace` (see example below). AMP will not replace variables that are not explicitly specified.
 
@@ -482,7 +513,7 @@ Once the user tries to submit the form, AMP will try to resolve the variables an
 
 Note how `CANONICAL_HOSTNAME` above did not get replaced because it was not in the allowlist through `data-amp-replace` attribute on the first field.
 
-Substitutions will happen on every subsequent submission. Read more about [variable substitutions in AMP](../../spec/amp-var-substitutions.md).
+Substitutions will happen on every subsequent submission. Read more about [variable substitutions in AMP](../../docs/spec/amp-var-substitutions.md).
 
 [/filter]<!-- formats="websites, ads" -->
 

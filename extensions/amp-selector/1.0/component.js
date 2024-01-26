@@ -1,24 +1,10 @@
-/**
- * Copyright 2020 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import objstr from 'obj-str';
 
-import * as Preact from '../../../src/preact';
-import {Keys} from '../../../src/core/constants/key-codes';
-import {forwardRef} from '../../../src/preact/compat';
-import {mod} from '../../../src/utils/math';
-import {tryFocus} from '../../../src/dom';
+import {Keys_Enum} from '#core/constants/key-codes';
+import {tryFocus} from '#core/dom';
+import {mod} from '#core/math';
+
+import * as Preact from '#preact';
 import {
   useCallback,
   useContext,
@@ -28,9 +14,11 @@ import {
   useMemo,
   useRef,
   useState,
-} from '../../../src/preact';
+} from '#preact';
+import {forwardRef} from '#preact/compat';
+import {propName, tabindexFromProps} from '#preact/utils';
+
 import {useStyles} from './component.jss';
-import objstr from 'obj-str';
 
 const SelectorContext = Preact.createContext(
   /** @type {SelectorDef.ContextProps} */ ({selected: []})
@@ -48,29 +36,31 @@ export const KEYBOARD_SELECT_MODE = {
 };
 
 /**
- * @param {!SelectorDef.Props} props
- * @param {{current: (!SelectorDef.SelectorApi|null)}} ref
+ * @param {!BentoSelectorDef.Props} props
+ * @param {{current: ?SelectorDef.SelectorApi}} ref
  * @return {PreactDef.Renderable}
  */
 function SelectorWithRef(
   {
     as: Comp = 'div',
-    disabled,
+    children,
     defaultValue = [],
+    disabled,
     form,
     keyboardSelectMode = KEYBOARD_SELECT_MODE.NONE,
-    value,
     multiple,
     name,
     onChange,
-    onKeyDown: customOnKeyDown,
     role = 'listbox',
-    tabIndex,
-    children,
+    value,
     ...rest
   },
   ref
 ) {
+  const tabindex = tabindexFromProps(
+    rest,
+    keyboardSelectMode === KEYBOARD_SELECT_MODE.SELECT ? 0 : -1
+  );
   const [selectedState, setSelectedState] = useState(value ?? defaultValue);
   const optionsRef = useRef([]);
   const focusRef = useRef({active: null, focusMap: {}});
@@ -122,8 +112,6 @@ function SelectorWithRef(
     }
   }, [onChange, multiple, selected]);
 
-  const clear = useCallback(() => setSelectedState([]), []);
-
   const toggle = useCallback(
     (option, select) => {
       const isSelected = selected.includes(option);
@@ -145,6 +133,13 @@ function SelectorWithRef(
     },
     [onChange, setSelectedState, selectOption, selected]
   );
+
+  const clear = useCallback(() => {
+    setSelectedState([]);
+    if (onChange) {
+      onChange({value: [], option: value});
+    }
+  }, [setSelectedState, onChange, value]);
 
   /**
    * This method uses the given callback on the target index found by
@@ -222,18 +217,15 @@ function SelectorWithRef(
 
   const onKeyDown = useCallback(
     (e) => {
-      if (customOnKeyDown) {
-        customOnKeyDown(e);
-      }
       const {key} = e;
       let dir;
       switch (key) {
-        case Keys.LEFT_ARROW: // Fallthrough.
-        case Keys.UP_ARROW:
+        case Keys_Enum.LEFT_ARROW: // Fallthrough.
+        case Keys_Enum.UP_ARROW:
           dir = -1;
           break;
-        case Keys.RIGHT_ARROW: // Fallthrough.
-        case Keys.DOWN_ARROW:
+        case Keys_Enum.RIGHT_ARROW: // Fallthrough.
+        case Keys_Enum.DOWN_ARROW:
           dir = 1;
           break;
         default:
@@ -247,7 +239,7 @@ function SelectorWithRef(
         }
       }
     },
-    [customOnKeyDown, keyboardSelectMode, focusBy, selectBy]
+    [keyboardSelectMode, focusBy, selectBy]
   );
 
   return (
@@ -258,13 +250,10 @@ function SelectorWithRef(
       aria-multiselectable={multiple}
       disabled={disabled}
       form={form}
-      keyboardSelectMode={keyboardSelectMode}
       multiple={multiple}
       name={name}
       onKeyDown={onKeyDown}
-      tabIndex={
-        tabIndex ?? keyboardSelectMode === KEYBOARD_SELECT_MODE.SELECT ? 0 : -1
-      }
+      tabindex={tabindex}
       value={selected}
     >
       <input hidden defaultValue={selected} name={name} form={form} />
@@ -275,24 +264,22 @@ function SelectorWithRef(
   );
 }
 
-const Selector = forwardRef(SelectorWithRef);
-Selector.displayName = 'Selector'; // Make findable for tests.
-export {Selector};
+const BentoSelector = forwardRef(SelectorWithRef);
+BentoSelector.displayName = 'BentoSelector'; // Make findable for tests.
+export {BentoSelector};
 
 /**
  * @param {!SelectorDef.OptionProps} props
  * @return {PreactDef.Renderable}
  */
-export function Option({
+export function BentoSelectorOption({
   as: Comp = 'div',
   disabled = false,
+  focus: customFocus,
   index,
-  onClick: customOnClick,
-  onFocus: customOnFocus,
-  onKeyDown: customOnKeyDown,
   option,
   role = 'option',
-  tabIndex,
+  [propName('class')]: className = '',
   ...rest
 }) {
   const classes = useStyles();
@@ -303,21 +290,21 @@ export function Option({
     keyboardSelectMode,
     multiple: selectorMultiple,
     optionsRef,
-    selected,
     selectOption,
+    selected,
   } = useContext(SelectorContext);
 
-  const focus = useCallback(
-    (e) => {
-      if (customOnFocus) {
-        customOnFocus(e);
-      }
-      if (ref.current) {
-        tryFocus(ref.current);
-      }
-    },
-    [customOnFocus]
+  const tabindex = tabindexFromProps(
+    rest,
+    keyboardSelectMode === KEYBOARD_SELECT_MODE.SELECT ? -1 : 0
   );
+
+  const focus = useCallback(() => {
+    customFocus?.();
+    if (ref.current) {
+      tryFocus(ref.current);
+    }
+  }, [customFocus]);
 
   // Element should be "registered" before it is visible.
   useLayoutEffect(() => {
@@ -351,49 +338,41 @@ export function Option({
     selectOption(option);
   }, [disabled, option, selectOption, selectorDisabled]);
 
-  const onClick = useCallback(
-    (e) => {
-      trySelect();
-      if (customOnClick) {
-        customOnClick(e);
-      }
-    },
-    [customOnClick, trySelect]
-  );
+  const onClick = useCallback(() => {
+    trySelect();
+  }, [trySelect]);
 
   const onKeyDown = useCallback(
     (e) => {
-      if (e.key === Keys.ENTER || e.key === Keys.SPACE) {
+      if (e.key === Keys_Enum.ENTER || e.key === Keys_Enum.SPACE) {
         trySelect();
       }
-      if (customOnKeyDown) {
-        customOnKeyDown(e);
-      }
     },
-    [customOnKeyDown, trySelect]
+    [trySelect]
   );
 
   const isSelected = /** @type {!Array} */ (selected).includes(option);
-  const optionProps = {
-    ...rest,
-    className: objstr({
-      [classes.option]: true,
-      [classes.selected]: isSelected && !selectorMultiple,
-      [classes.multiselected]: isSelected && selectorMultiple,
-      [classes.disabled]: disabled || selectorDisabled,
-    }),
-    disabled,
-    'aria-disabled': String(disabled),
-    onClick,
-    onFocus: () => (focusRef.current.active = option),
-    onKeyDown,
-    option,
-    ref,
-    role,
-    selected: isSelected,
-    'aria-selected': String(isSelected),
-    tabIndex:
-      tabIndex ?? keyboardSelectMode === KEYBOARD_SELECT_MODE.SELECT ? -1 : 0,
-  };
-  return <Comp {...optionProps} />;
+  return (
+    <Comp
+      {...rest}
+      aria-disabled={String(disabled)}
+      aria-selected={String(isSelected)}
+      class={objstr({
+        [className]: !!className,
+        [classes.option]: true,
+        [classes.selected]: isSelected && !selectorMultiple,
+        [classes.multiselected]: isSelected && selectorMultiple,
+        [classes.disabled]: disabled || selectorDisabled,
+      })}
+      disabled={disabled}
+      onClick={onClick}
+      onFocus={() => (focusRef.current.active = option)}
+      onKeyDown={onKeyDown}
+      ref={ref}
+      role={role}
+      selected={isSelected}
+      tabindex={tabindex}
+      value={option}
+    />
+  );
 }

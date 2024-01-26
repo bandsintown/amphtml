@@ -1,20 +1,26 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {escapeCssSelectorIdent} from '#core/dom/css-selectors';
+import {layoutRectLtwh} from '#core/dom/layout/rect';
+import {
+  closestAncestorElementBySelector,
+  matches,
+  scopedQuerySelector,
+  scopedQuerySelectorAll,
+} from '#core/dom/query';
+import {computedStyle, getVendorJsPropertyName} from '#core/dom/style';
+import {isEnumValue, isObject} from '#core/types';
+import {isArray, toArray} from '#core/types/array';
+import {map} from '#core/types/object';
+import {dashToCamelCase} from '#core/types/string';
 
+import {isExperimentOn} from '#experiments';
+
+import {dev, devAssert, user, userAssert} from '#utils/log';
+
+import {parseCss} from './parsers/css-expr';
 import {CssNumberNode, CssTimeNode, isVarCss} from './parsers/css-expr-ast';
+import {extractKeyframes} from './parsers/keyframes-extractor';
+import {NativeWebAnimationRunner} from './runners/native-web-animation-runner';
+import {ScrollTimelineWorkletRunner} from './runners/scrolltimeline-worklet-runner';
 import {
   InternalWebAnimationRequestDef,
   WebAnimationDef,
@@ -30,28 +36,10 @@ import {
   WebSwitchAnimationDef,
   isAllowlistedProp,
 } from './web-animation-types';
-import {NativeWebAnimationRunner} from './runners/native-web-animation-runner';
-import {ScrollTimelineWorkletRunner} from './runners/scrolltimeline-worklet-runner';
-import {assertHttpsUrl, resolveRelativeUrl} from '../../../src/url';
-import {
-  closestAncestorElementBySelector,
-  matches,
-  scopedQuerySelector,
-  scopedQuerySelectorAll,
-} from '../../../src/dom';
-import {computedStyle, getVendorJsPropertyName} from '../../../src/style';
-import {dashToCamelCase} from '../../../src/core/types/string';
-import {dev, devAssert, user, userAssert} from '../../../src/log';
-import {escapeCssSelectorIdent} from '../../../src/css';
-import {extractKeyframes} from './parsers/keyframes-extractor';
-import {getMode} from '../../../src/mode';
-import {isArray, toArray} from '../../../src/core/types/array';
-import {isExperimentOn} from '../../../src/experiments';
+
 import {isInFie} from '../../../src/iframe-helper';
-import {isObject} from '../../../src/core/types';
-import {layoutRectLtwh} from '../../../src/layout-rect';
-import {map} from '../../../src/core/types/object';
-import {parseCss} from './parsers/css-expr';
+import {getMode} from '../../../src/mode';
+import {assertHttpsUrl, resolveRelativeUrl} from '../../../src/url';
 
 /** @const {string} */
 const TAG = 'amp-animation';
@@ -65,7 +53,7 @@ const TARGET_ANIM_ID = '__AMP_ANIM_ID';
 let animIdCounter = 0;
 
 /**
- * @const {!Object<string, boolean>}
+ * @const {!{[key: string]: boolean}}
  */
 const SERVICE_PROPS = {
   'offset': true,
@@ -223,7 +211,7 @@ export class Builder {
    * @param {?WebAnimationDef|undefined} args
    * @param {?Element} target
    * @param {?number} index
-   * @param {?Object<string, *>} vars
+   * @param {?{[key: string]: *}} vars
    * @param {?WebAnimationTimingDef} timing
    * @return {!Promise<!Array<!InternalWebAnimationRequestDef>>}
    * @protected
@@ -258,7 +246,7 @@ export class Builder {
    * @param {!Array<string>} path
    * @param {?Element} target
    * @param {?number} index
-   * @param {?Object<string, *>} vars
+   * @param {?{[key: string]: *}} vars
    * @param {?WebAnimationTimingDef} timing
    * @private
    * @return {*} TODO(#23582): Specify return type
@@ -301,7 +289,7 @@ export class MeasureScanner extends Scanner {
    * @param {!Array<string>} path
    * @param {?Element} target
    * @param {?number} index
-   * @param {?Object<string, *>} vars
+   * @param {?{[key: string]: *}} vars
    * @param {?WebAnimationTimingDef} timing
    */
   constructor(builder, css, path, target, index, vars, timing) {
@@ -322,7 +310,7 @@ export class MeasureScanner extends Scanner {
     /** @private {?number} */
     this.index_ = index;
 
-    /** @private {!Object<string, *>} */
+    /** @private {!{[key: string]: *}} */
     this.vars_ = vars || map();
 
     /** @private {!WebAnimationTimingDef} */
@@ -423,10 +411,10 @@ export class MeasureScanner extends Scanner {
     });
     this.with_(spec, () => {
       const {
-        target_: target,
         index_: index,
-        vars_: vars,
+        target_: target,
         timing_: timing,
+        vars_: vars,
       } = this;
       const promise = otherSpecPromise
         .then((otherSpec) => {
@@ -490,7 +478,7 @@ export class MeasureScanner extends Scanner {
       // allowlisted. Additionally, the `offset:0` frames are inserted
       // to polyfill partial keyframes per spec.
       // See https://github.com/w3c/web-animations/issues/187
-      const object = /** @type {!Object<string, *>} */ (specKeyframes);
+      const object = /** @type {!{[key: string]: *}} */ (specKeyframes);
       /** @type {!WebKeyframesDef} */
       const keyframes = {};
       for (const prop in object) {
@@ -522,7 +510,7 @@ export class MeasureScanner extends Scanner {
       // to polyfill partial keyframes per spec.
       // See https://github.com/w3c/web-animations/issues/187 and
       // https://github.com/web-animations/web-animations-js/issues/14
-      const array = /** @type {!Array<!Object<string, *>>} */ (specKeyframes);
+      const array = /** @type {!Array<!{[key: string]: *}>} */ (specKeyframes);
       /** @type {!WebKeyframesDef} */
       const keyframes = [];
       const addStartFrame = array.length == 1 || array[0].offset > 0;
@@ -593,10 +581,10 @@ export class MeasureScanner extends Scanner {
   with_(spec, callback) {
     // Save context.
     const {
-      target_: prevTarget,
       index_: prevIndex,
-      vars_: prevVars,
+      target_: prevTarget,
       timing_: prevTiming,
+      vars_: prevVars,
     } = this;
 
     // Push new context and perform calculations.
@@ -715,9 +703,9 @@ export class MeasureScanner extends Scanner {
 
   /**
    * Merges vars by defaulting values from the previous vars.
-   * @param {!Object<string, *>} newVars
-   * @param {!Object<string, *>} prevVars
-   * @return {!Object<string, *>}
+   * @param {!{[key: string]: *}} newVars
+   * @param {!{[key: string]: *}} prevVars
+   * @return {!{[key: string]: *}}
    * @private
    */
   mergeVars_(newVars, prevVars) {
@@ -771,14 +759,12 @@ export class MeasureScanner extends Scanner {
 
     // Identifier CSS values.
     const easing = this.css_.resolveIdent(newTiming.easing, prevTiming.easing);
-    const direction = /** @type {!WebAnimationTimingDirection} */ (this.css_.resolveIdent(
-      newTiming.direction,
-      prevTiming.direction
-    ));
-    const fill = /** @type {!WebAnimationTimingFill} */ (this.css_.resolveIdent(
-      newTiming.fill,
-      prevTiming.fill
-    ));
+    const direction = /** @type {!WebAnimationTimingDirection} */ (
+      this.css_.resolveIdent(newTiming.direction, prevTiming.direction)
+    );
+    const fill = /** @type {!WebAnimationTimingFill} */ (
+      this.css_.resolveIdent(newTiming.fill, prevTiming.fill)
+    );
 
     // Validate.
     this.validateTime_(duration, newTiming.duration, 'duration');
@@ -794,16 +780,17 @@ export class MeasureScanner extends Scanner {
       '"iterationStart" is invalid: %s',
       newTiming.iterationStart
     );
-    user().assertEnumValue(
-      WebAnimationTimingDirection,
-      /** @type {string} */ (direction),
-      'direction'
+
+    userAssert(
+      isEnumValue(WebAnimationTimingDirection, direction),
+      `Unknown direction: ${direction}`
     );
-    user().assertEnumValue(
-      WebAnimationTimingFill,
-      /** @type {string} */ (fill),
-      'fill'
+
+    userAssert(
+      isEnumValue(WebAnimationTimingFill, fill),
+      `Unknown fill: ${fill}`
     );
+
     return {
       duration,
       delay,
@@ -854,7 +841,7 @@ class CssContextImpl {
    * @param {!./web-animation-types.WebAnimationBuilderOptionsDef} options
    */
   constructor(win, rootNode, baseUrl, options) {
-    const {scope = null, scaleByScope = false} = options;
+    const {scaleByScope = false, scope = null} = options;
 
     /** @const @private */
     this.win_ = win;
@@ -871,10 +858,10 @@ class CssContextImpl {
     /** @const @private */
     this.baseUrl_ = baseUrl;
 
-    /** @private {!Object<string, !CSSStyleDeclaration>} */
+    /** @private {!{[key: string]: !CSSStyleDeclaration}} */
     this.computedStyleCache_ = map();
 
-    /** @private {!Object<string, ?./parsers/css-expr-ast.CssNode>} */
+    /** @private {!{[key: string]: ?./parsers/css-expr-ast.CssNode}} */
     this.parsedCssCache_ = map();
 
     /** @private {?number} */
@@ -886,7 +873,7 @@ class CssContextImpl {
     /** @private {?number} */
     this.currentIndex_ = null;
 
-    /** @private {?Object<string, *>} */
+    /** @private {?{[key: string]: *}} */
     this.vars_ = null;
 
     /** @private {!Array<string>} */
@@ -967,9 +954,9 @@ class CssContextImpl {
     let styles = this.computedStyleCache_[targetId];
     if (!styles) {
       styles = computedStyle(this.win_, target);
-      this.computedStyleCache_[
-        targetId
-      ] = /** @type {!CSSStyleDeclaration} */ (styles);
+      this.computedStyleCache_[targetId] = /** @type {!CSSStyleDeclaration} */ (
+        styles
+      );
     }
 
     // Resolve a var or a property.
@@ -995,7 +982,7 @@ class CssContextImpl {
    * @protected
    */
   withTarget(target, index, callback) {
-    const {currentTarget_: prev, currentIndex_: prevIndex} = this;
+    const {currentIndex_: prevIndex, currentTarget_: prev} = this;
     this.currentTarget_ = target;
     this.currentIndex_ = index;
     const result = callback(target);
@@ -1005,7 +992,7 @@ class CssContextImpl {
   }
 
   /**
-   * @param {?Object<string, *>} vars
+   * @param {?{[key: string]: *}} vars
    * @param {function():T} callback
    * @return {T}
    * @template T
@@ -1032,8 +1019,8 @@ class CssContextImpl {
   }
 
   /**
-   * @param {!Object<string, *>} input
-   * @return {!Object<string, string|number>}
+   * @param {!{[key: string]: *}} input
+   * @return {!{[key: string]: string|number}}
    */
   resolveCssMap(input) {
     const result = map();
@@ -1165,8 +1152,8 @@ class CssContextImpl {
       this.vars_ && this.vars_[varName] != undefined
         ? this.vars_[varName]
         : this.currentTarget_
-        ? this.measure(this.currentTarget_, varName)
-        : null;
+          ? this.measure(this.currentTarget_, varName)
+          : null;
     if (rawValue == null || rawValue === '') {
       user().warn(TAG, `Variable not found: "${varName}"`);
     }
@@ -1200,7 +1187,7 @@ class CssContextImpl {
     if (!this.viewportParams_) {
       if (this.scope_ && this.scaleByScope_) {
         const rect = this.scope_./*OK*/ getBoundingClientRect();
-        const {offsetWidth, offsetHeight} = this.scope_;
+        const {offsetHeight, offsetWidth} = this.scope_;
         this.viewportParams_ = {
           offset: {x: rect.x, y: rect.y},
           size: {width: offsetWidth, height: offsetHeight},
@@ -1208,7 +1195,7 @@ class CssContextImpl {
           scaleFactorY: offsetHeight / (rect.height || 1),
         };
       } else {
-        const {innerWidth, innerHeight} = this.win_;
+        const {innerHeight, innerWidth} = this.win_;
         this.viewportParams_ = {
           offset: {x: 0, y: 0},
           size: {width: innerWidth, height: innerHeight},
@@ -1302,7 +1289,7 @@ class CssContextImpl {
    */
   getElementRect_(target) {
     const {offset, scaleFactorX, scaleFactorY} = this.getViewportParams_();
-    const {x, y, width, height} = target./*OK*/ getBoundingClientRect();
+    const {height, width, x, y} = target./*OK*/ getBoundingClientRect();
 
     // This assumes default `transform-origin: center center`
     return layoutRectLtwh(

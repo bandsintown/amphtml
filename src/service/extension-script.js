@@ -1,24 +1,14 @@
-/**
- * Copyright 2021 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {propagateNonce} from '#core/dom';
+import * as mode from '#core/mode';
 
+import * as urls from '../config/urls';
 import {getMode} from '../mode';
-import {urls} from '../config';
 
 const CUSTOM_TEMPLATES = ['amp-mustache'];
 const LATEST_VERSION = 'latest';
+
+const regexURL = /^https:\/\/([a-zA-Z0-9_-]+\.)?cdn\.ampproject\.org(\/.*)?$/;
+const testRegexURL = /^([a-zA-Z0-9_-]+\.)?localhost$/;
 
 /**
  * Calculate the base url for any scripts.
@@ -55,11 +45,30 @@ export function calculateExtensionScriptUrl(
   version,
   opt_isLocalDev
 ) {
-  const fileExtension = getMode().esm ? '.mjs' : '.js';
+  const fileExtension = mode.isEsm() ? '.mjs' : '.js';
   const base = calculateScriptBaseUrl(location, opt_isLocalDev);
   const rtv = getMode().rtvVersion;
   const extensionVersion = version ? '-' + version : '';
   return `${base}/rtv/${rtv}/v0/${extensionId}${extensionVersion}${fileExtension}`;
+}
+
+/**
+ * Calculate url for a file in the v0/ extension directory.
+ * @param {!Window} win The window
+ * @param {!Location} location The window's location
+ * @param {string} filename
+ * @param {boolean=} opt_isLocalDev
+ * @return {string}
+ */
+export function calculateExtensionFileUrl(
+  win,
+  location,
+  filename,
+  opt_isLocalDev
+) {
+  const base = calculateScriptBaseUrl(location, opt_isLocalDev);
+  const rtv = getMode(win).rtvVersion;
+  return `${base}/rtv/${rtv}/v0/${filename}`;
 }
 
 /**
@@ -77,7 +86,7 @@ export function calculateEntryPointScriptUrl(
   isLocalDev,
   opt_rtv
 ) {
-  const fileExtension = getMode().esm ? '.mjs' : '.js';
+  const fileExtension = mode.isEsm() ? '.mjs' : '.js';
   const base = calculateScriptBaseUrl(location, isLocalDev);
   if (isLocalDev) {
     return `${base}/${entryPoint}${fileExtension}`;
@@ -99,7 +108,7 @@ export function parseExtensionUrl(scriptUrl) {
   }
   // Note that the "(\.max)?" group only applies to local dev.
   const matches = scriptUrl.match(
-    /^(.*)\/(.*)-([0-9.]+|latest)(\.max)?\.(?:js|mjs)$/i
+    /^(.*)\/(.*)-([0-9.]+|latest)(\.max)?\.(?:js|mjs)(?:\?ssr-css=[0|1])?$/i
   );
   const extensionId = matches ? matches[2] : undefined;
   const extensionVersion = matches ? matches[3] : undefined;
@@ -131,15 +140,10 @@ export function createExtensionScript(win, extensionId, version) {
   }
   scriptElement.setAttribute('data-script', extensionId);
   scriptElement.setAttribute('i-amphtml-inserted', '');
-  if (getMode().esm) {
+  if (mode.isEsm()) {
     scriptElement.setAttribute('type', 'module');
   }
-
-  // Propagate nonce to all generated script tags.
-  const currentScript = win.document.head.querySelector('script[nonce]');
-  if (currentScript) {
-    scriptElement.setAttribute('nonce', currentScript.getAttribute('nonce'));
-  }
+  propagateNonce(win.document, scriptElement);
 
   // Allow error information to be collected
   // https://github.com/ampproject/amphtml/issues/7353
@@ -154,7 +158,31 @@ export function createExtensionScript(win, extensionId, version) {
     version,
     getMode(win).localDev
   );
-  scriptElement.src = scriptSrc;
+
+  let policy = {
+    createScriptURL: function (url) {
+      // Only allow trusted URLs
+      if (
+        regexURL.test(url) ||
+        ((getMode().test || getMode().localDev) &&
+          testRegexURL.test(new URL(url).hostname)) ||
+        new URL(url).host === 'fonts.googleapis.com'
+      ) {
+        return url;
+      } else {
+        return '';
+      }
+    },
+  };
+
+  if (self.trustedTypes && self.trustedTypes.createPolicy) {
+    policy = self.trustedTypes.createPolicy(
+      'extension-script#createExtensionScript',
+      policy
+    );
+  }
+
+  scriptElement.src = policy.createScriptURL(scriptSrc);
   return scriptElement;
 }
 
@@ -211,7 +239,7 @@ export function getExtensionScripts(
 /**
  * Get list of all the extension JS files.
  * @param {HTMLHeadElement|Element|ShadowRoot|Document} head
- * @return {!Array<{extensionId: string, extensionVersion: string}>}
+ * @return {!Array<{script: HTMLScriptElement, extensionId: string, extensionVersion: string}>}
  */
 export function extensionScriptsInNode(head) {
   // ampdoc.getHeadNode() can return null.
@@ -231,7 +259,11 @@ export function extensionScriptsInNode(head) {
       script.getAttribute('custom-template');
     const urlParts = parseExtensionUrl(script.src);
     if (extensionId && urlParts) {
-      scripts.push({extensionId, extensionVersion: urlParts.extensionVersion});
+      scripts.push({
+        script,
+        extensionId,
+        extensionVersion: urlParts.extensionVersion,
+      });
     }
   }
   return scripts;

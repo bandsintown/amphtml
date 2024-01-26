@@ -1,37 +1,25 @@
-/**
- * Copyright 2019 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {Layout_Enum} from '#core/dom/layout';
+import {parseJson} from '#core/types/object/json';
 
-import {ATTR_PREFIX, Variants, allocateVariant} from './variant';
-import {Layout} from '../../../src/layout';
-import {Services} from '../../../src/services';
-import {applyExperimentToVariant} from './apply-experiment';
-import {devAssert, user, userAssert} from '../../../src/log';
-import {dict} from '../../../src/core/types/object';
-import {getServicePromiseForDoc} from '../../../src/service';
+import {isExperimentOn} from '#experiments';
+
+import {Services} from '#service';
 import {
   installOriginExperimentsForDoc,
   originExperimentsForDoc,
-} from '../../../src/service/origin-experiments-impl';
-import {isExperimentOn} from '../../../src/experiments';
-import {parseJson} from '../../../src/json';
+} from '#service/origin-experiments-impl';
+
+import {devAssert, user, userAssert} from '#utils/log';
+
+import {applyExperimentToVariant} from './apply-experiment';
+import {ATTR_PREFIX, Variants, allocateVariant} from './variant';
+
+import {getServicePromiseForDoc} from '../../../src/service-helpers';
 
 const TAG = 'amp-experiment';
 
 export class AmpExperiment extends AMP.BaseElement {
-  /** @override @nocollapse */
+  /** @override  */
   static prerenderAllowed() {
     /*
      * Prerender is allowed because the client_id is only used to calculate
@@ -44,7 +32,7 @@ export class AmpExperiment extends AMP.BaseElement {
 
   /** @override */
   isLayoutSupported(layout) {
-    return layout == Layout.NODISPLAY || layout == Layout.CONTAINER;
+    return layout == Layout_Enum.NODISPLAY || layout == Layout_Enum.CONTAINER;
   }
 
   /** @override */
@@ -64,7 +52,7 @@ export class AmpExperiment extends AMP.BaseElement {
       const variantsService = responses[0];
       const enabled = responses[1];
 
-      let config = dict({});
+      let config = {};
 
       try {
         config = this.getConfig_();
@@ -106,7 +94,7 @@ export class AmpExperiment extends AMP.BaseElement {
           });
         });
 
-        /** @private @const {!Promise<!Object<string, ?string>>} */
+        /** @private @const {!Promise<!{[key: string]: ?string}>} */
         const experimentVariants = Promise.all(variants)
           .then(() => {
             const ampdoc = this.getAmpDoc();
@@ -181,7 +169,7 @@ export class AmpExperiment extends AMP.BaseElement {
    * Object. This is useful for type checking in analytics
    * and disabling all experiments manually.
    * @param {!JsonObject} config
-   * @return {!Object<string, ?string>}
+   * @return {!{[key: string]: ?string}}
    */
   getEmptyExperimentToVariant_(config) {
     const experimentToVariant = Object.create(null);

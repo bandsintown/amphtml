@@ -1,31 +1,19 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {AmpEvents_Enum} from '#core/constants/amp-events';
+
+import {createCustomEvent} from '#utils/event-helper';
+
+import {sleep} from '#testing/helpers';
 
 import * as chunkModule from '../../../../src/chunk';
-import {AmpEvents} from '../../../../src/core/constants/amp-events';
-import {LinkReplacementCache} from '../link-rewriter/link-replacement-cache';
-import {LinkRewriter} from '../link-rewriter/link-rewriter';
-import {LinkRewriterManager} from '../link-rewriter/link-rewriter-manager';
 import {
   ORIGINAL_URL_ATTRIBUTE,
   PRIORITY_META_TAG_NAME,
   EVENTS as linkRewriterEvents,
 } from '../link-rewriter/constants';
+import {LinkReplacementCache} from '../link-rewriter/link-replacement-cache';
+import {LinkRewriter} from '../link-rewriter/link-rewriter';
+import {LinkRewriterManager} from '../link-rewriter/link-rewriter-manager';
 import {TwoStepsResponse} from '../link-rewriter/two-steps-response';
-import {createCustomEvent} from '../../../../src/event-helper';
 
 const CLICK_EVENT = {
   type: 'click',
@@ -81,7 +69,9 @@ describes.fakeWin('LinkRewriterManager', {amp: true}, (env) => {
 
   describe('When starting service', () => {
     it('Should listen for DOM_UPDATE', () => {
-      const spy = rootDocument.addEventListener.withArgs(AmpEvents.DOM_UPDATE);
+      const spy = rootDocument.addEventListener.withArgs(
+        AmpEvents_Enum.DOM_UPDATE
+      );
       expect(spy.calledOnce).to.be.true;
     });
 
@@ -203,7 +193,7 @@ describes.fakeWin('LinkRewriterManager', {amp: true}, (env) => {
       const linkRewriterVendor2 = registerLinkRewriterHelper('vendor2');
       const linkRewriterVendor3 = registerLinkRewriterHelper('vendor3');
 
-      sendEventHelper(AmpEvents.DOM_UPDATE);
+      sendEventHelper(AmpEvents_Enum.DOM_UPDATE);
 
       expect(linkRewriterVendor1.onDomUpdated.calledOnce).to.be.true;
       expect(linkRewriterVendor2.onDomUpdated.calledOnce).to.be.true;
@@ -757,7 +747,7 @@ describes.fakeWin('Link Rewriter', {amp: true}, (env) => {
       expect(anchor1.getAttribute(ORIGINAL_URL_ATTRIBUTE)).to.equal(initialUrl);
     });
 
-    it('Should restore the original link after the delay', (done) => {
+    it('Should restore the original link after the delay', async () => {
       const replacementUrl = 'https://replacementurl.com/';
       linkRewriter.anchorReplacementCache_.updateLinkList([anchor1]);
       linkRewriter.anchorReplacementCache_.updateReplacementUrls([
@@ -766,10 +756,9 @@ describes.fakeWin('Link Rewriter', {amp: true}, (env) => {
       linkRewriter.rewriteAnchorUrl(anchor1);
 
       expect(anchor1.href).to.equal(replacementUrl);
-      setTimeout(() => {
-        expect(anchor1.href).to.equal(initialUrl);
-        done();
-      }, linkRewriter.restoreDelay_ + 1);
+
+      await sleep(linkRewriter.restoreDelay_ + 1);
+      expect(anchor1.href).to.equal(initialUrl);
     });
   });
 });

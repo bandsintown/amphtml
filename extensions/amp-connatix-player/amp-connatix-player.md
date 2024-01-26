@@ -6,22 +6,6 @@ teaser:
   text: Displays a cloud-hosted Connatix Player.
 ---
 
-<!--
-Copyright 2019 The AMP HTML Authors. All Rights Reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS-IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
--->
-
 # amp-connatix-player
 
 ## Usage
@@ -53,6 +37,14 @@ Connatix management dashboard.
 
 Connatix media id. This represents the unique ID of any media in your Library.
 This can be found at the Library section in the Connatix management dashboard.
+
+### `data-param-\*`
+
+All `data-param-*` prefixed attributes are turned into URL parameters and passed to iframe src.
+
+### `dock`
+Requires `amp-video-docking` extension. If this attribute is present and the video is playing manually, the video will be "minimized" and fixed to a corner or an element when the user scrolls out of the video component's visual area.
+For more details, see [documentation on the docking extension itself](https://github.com/ampproject/amphtml/blob/master/extensions/amp-video-docking/amp-video-docking.md).
 
 ### Common attributes
 

@@ -1,21 +1,7 @@
-/**
- * Copyright 2020 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {createElementWithAttributes, escapeHtml} from '#core/dom';
 
-import {createElementWithAttributes, escapeHtml} from '../../../src/dom';
-import {dict} from '../../../src/core/types/object';
+import {isAttributionReportingAllowed} from '#utils/privacy-sandbox-utils';
+
 import {getFieSafeScriptSrcs} from '../../../src/friendly-iframe-embed';
 
 // If making changes also change ALLOWED_FONT_REGEX in head-validation.js
@@ -81,10 +67,8 @@ export const createSecureDocSkeleton = (url, sanitizedHeadElements, body) =>
  */
 export function createSecureFrame(win, title, height, width) {
   const {document} = win;
-  const iframe = /** @type {!HTMLIFrameElement} */ (createElementWithAttributes(
-    document,
-    'iframe',
-    dict({
+  const iframe = /** @type {!HTMLIFrameElement} */ (
+    createElementWithAttributes(document, 'iframe', {
       // NOTE: It is possible for either width or height to be 'auto',
       // a non-numeric value.
       'height': height,
@@ -95,7 +79,15 @@ export function createSecureFrame(win, title, height, width) {
       'allowtransparency': '',
       'scrolling': 'no',
       'sandbox': sandboxVals,
+      'role': 'region',
+      'aria-label': 'Advertisement',
+      'tabindex': '0',
     })
-  ));
+  );
+
+  if (isAttributionReportingAllowed(document)) {
+    iframe.setAttribute('allow', `attribution-reporting 'src'`);
+  }
+
   return iframe;
 }

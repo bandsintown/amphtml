@@ -1,28 +1,13 @@
-#
-# Copyright 2016 The AMP HTML Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#      http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS-IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the license.
-#
-
 tags: {  # amp-video 1.0
   html_format: AMP
   tag_name: "SCRIPT"
-  satisfies: "amp-video 1.0"
-  excludes: "amp-video 0.1"
+  satisfies_condition: "amp-video 1.0"
+  excludes_condition: "amp-video 0.1"
   extension_spec: {
     name: "amp-video"
     version_name: "v1.0"
     version: "1.0"
+    bento_supported_version: "1.0"
   }
   attr_lists: "common-extension-attrs"
 }
@@ -31,8 +16,8 @@ tags: {  # amp-video 0.1
   html_format: AMP
   html_format: AMP4ADS
   tag_name: "SCRIPT"
-  satisfies: "amp-video 0.1"
-  excludes: "amp-video 1.0"
+  satisfies_condition: "amp-video 0.1"
+  excludes_condition: "amp-video 1.0"
   extension_spec: {
     name: "amp-video"
     version: "0.1"
@@ -192,8 +177,16 @@ tags: {  # <amp-video> in amp-story
   }
   attrs: {
     name: "cache"
-    requires_extension: "amp-cache-url"
     value: "google"
+  }
+  attrs: {
+    name: "captions-id"
+    requires_extension: "amp-story-captions"
+  }
+  attrs: {
+    name: "volume"
+    # Volume must be in the range [0, 1].
+    value_regex: "^(0(\\.0*)?|(0?\\.[0-9]+)?|1(\\.0*)?)$"
   }
   attr_lists: "extended-amp-global"
   attr_lists: "amp-video-common"

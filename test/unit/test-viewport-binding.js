@@ -1,27 +1,13 @@
-/**
- * Copyright 2017 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {whenDocumentReady} from '#core/document/ready';
 
-import {Services} from '../../src/services';
-import {ViewportBindingIosEmbedWrapper_} from '../../src/service/viewport/viewport-binding-ios-embed-wrapper';
-import {ViewportBindingNatural_} from '../../src/service/viewport/viewport-binding-natural';
-import {installDocService} from '../../src/service/ampdoc-impl';
-import {installPlatformService} from '../../src/service/platform-impl';
-import {installVsyncService} from '../../src/service/vsync-impl';
-import {toggleExperiment} from '../../src/experiments';
-import {whenDocumentReady} from '../../src/document-ready';
+import {toggleExperiment} from '#experiments';
+
+import {Services} from '#service';
+import {installDocService} from '#service/ampdoc-impl';
+import {installPlatformService} from '#service/platform-impl';
+import {ViewportBindingIosEmbedWrapper_} from '#service/viewport/viewport-binding-ios-embed-wrapper';
+import {ViewportBindingNatural_} from '#service/viewport/viewport-binding-natural';
+import {installVsyncService} from '#service/vsync-impl';
 
 describes.realWin('ViewportBindingNatural', {ampCss: true}, (env) => {
   let binding;
@@ -98,14 +84,11 @@ describes.realWin('ViewportBindingNatural', {ampCss: true}, (env) => {
     expect(win.document.documentElement.style.paddingTop).to.equal('31px');
   });
 
-  // TODO(zhouyx, #11827): Make this test work on Safari.
-  it.configure()
-    .skipSafari()
-    .run('should calculate size', () => {
-      const size = binding.getSize();
-      expect(size.width).to.equal(100);
-      expect(size.height).to.equal(200);
-    });
+  it('should calculate size', () => {
+    const size = binding.getSize();
+    expect(size.width).to.equal(100);
+    expect(size.height).to.equal(200);
+  });
 
   it('should calculate scrollTop from scrollElement', () => {
     win.pageYOffset = 11;
@@ -344,48 +327,46 @@ describes.realWin('ViewportBindingIosEmbedWrapper', {ampCss: true}, (env) => {
     expect(binding.wrapper_).to.have.class('top');
   });
 
-  it.configure()
-    .skipFirefox()
-    .run('should have CSS setup', () => {
-      win.document.body.style.display = 'table';
-      const htmlCss = win.getComputedStyle(win.document.documentElement);
-      const wrapperCss = win.getComputedStyle(binding.wrapper_);
-      const bodyCss = win.getComputedStyle(win.document.body);
+  it('should have CSS setup', () => {
+    win.document.body.style.display = 'table';
+    const htmlCss = win.getComputedStyle(win.document.documentElement);
+    const wrapperCss = win.getComputedStyle(binding.wrapper_);
+    const bodyCss = win.getComputedStyle(win.document.body);
 
-      // `<html>` must have `position: static` or layout is broken.
-      expect(htmlCss.position).to.equal('static');
+    // `<html>` must have `position: static` or layout is broken.
+    expect(htmlCss.position).to.equal('static');
 
-      // `<html>` and `<i-amphtml-wrapper>` must be scrollable, but not `body`.
-      // Unfortunately, we can't test here `-webkit-overflow-scrolling`.
-      expect(htmlCss.overflowY).to.equal('auto');
-      expect(htmlCss.overflowX).to.equal('hidden');
-      expect(wrapperCss.overflowY).to.equal('auto');
-      expect(wrapperCss.overflowX).to.equal('hidden');
-      expect(bodyCss.overflowY).to.equal('visible');
-      expect(bodyCss.overflowX).to.equal('visible');
+    // `<html>` and `<i-amphtml-wrapper>` must be scrollable, but not `body`.
+    // Unfortunately, we can't test here `-webkit-overflow-scrolling`.
+    expect(htmlCss.overflowY).to.equal('auto');
+    expect(htmlCss.overflowX).to.equal('hidden');
+    expect(wrapperCss.overflowY).to.equal('auto');
+    expect(wrapperCss.overflowX).to.equal('hidden');
+    expect(bodyCss.overflowY).to.equal('visible');
+    expect(bodyCss.overflowX).to.equal('visible');
 
-      // Wrapper must be a block and positioned absolute at 0/0/0/0.
-      expect(wrapperCss.display).to.equal('block');
-      expect(wrapperCss.position).to.equal('absolute');
-      expect(wrapperCss.top).to.equal('0px');
-      expect(wrapperCss.left).to.equal('0px');
-      expect(wrapperCss.right).to.equal('0px');
-      expect(wrapperCss.bottom).to.equal('0px');
-      expect(wrapperCss.margin).to.equal('0px');
+    // Wrapper must be a block and positioned absolute at 0/0/0/0.
+    expect(wrapperCss.display).to.equal('block');
+    expect(wrapperCss.position).to.equal('absolute');
+    expect(wrapperCss.top).to.equal('0px');
+    expect(wrapperCss.left).to.equal('0px');
+    expect(wrapperCss.right).to.equal('0px');
+    expect(wrapperCss.bottom).to.equal('0px');
+    expect(wrapperCss.margin).to.equal('0px');
 
-      // `body` must have `relative` positioning and `block` display.
-      expect(bodyCss.position).to.equal('relative');
-      // Preserve the customized `display` value.
-      expect(bodyCss.display).to.equal('table');
+    // `body` must have `relative` positioning and `block` display.
+    expect(bodyCss.position).to.equal('relative');
+    // Preserve the customized `display` value.
+    expect(bodyCss.display).to.equal('table');
 
-      // `body` must have a 1px transparent border for two purposes:
-      // (1) to cancel out margin collapse in body's children;
-      // (2) to offset scroll adjustment to 1 to avoid scroll freeze problem.
-      expect(
-        bodyCss.borderTop.replace('rgba(0, 0, 0, 0)', 'transparent')
-      ).to.equal('1px solid transparent');
-      expect(bodyCss.margin).to.equal('0px');
-    });
+    // `body` must have a 1px transparent border for two purposes:
+    // (1) to cancel out margin collapse in body's children;
+    // (2) to offset scroll adjustment to 1 to avoid scroll freeze problem.
+    expect(
+      bodyCss.borderTop.replace('rgba(0, 0, 0, 0)', 'transparent')
+    ).to.equal('1px solid transparent');
+    expect(bodyCss.margin).to.equal('0px');
+  });
 
   it('should be immediately scrolled to 1 to avoid freeze', () => {
     expect(binding.wrapper_.scrollTop).to.equal(1);
@@ -415,14 +396,11 @@ describes.realWin('ViewportBindingIosEmbedWrapper', {ampCss: true}, (env) => {
     expect(win.document.documentElement.style.paddingTop).to.equal('');
   });
 
-  // TODO(zhouyx, #11827): Make this test work on Safari.
-  it.configure()
-    .skipSafari()
-    .run('should calculate size', () => {
-      const size = binding.getSize();
-      expect(size.width).to.equal(100);
-      expect(size.height).to.equal(100);
-    });
+  it('should calculate size', () => {
+    const size = binding.getSize();
+    expect(size.width).to.equal(100);
+    expect(size.height).to.equal(100);
+  });
 
   it('should calculate scrollTop from wrapper', () => {
     binding.wrapper_.scrollTop = 17;

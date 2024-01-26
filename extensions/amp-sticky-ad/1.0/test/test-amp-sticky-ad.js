@@ -1,25 +1,11 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import '../../../amp-ad/0.1/amp-ad';
 import '../amp-sticky-ad';
-import {Services} from '../../../../src/services';
-import {createElementWithAttributes} from '../../../../src/dom';
-import {macroTask} from '../../../../testing/yield';
-import {poll} from '../../../../testing/iframe';
+import {createElementWithAttributes} from '#core/dom';
+
+import {Services} from '#service';
+
+import {macroTask} from '#testing/helpers';
+import {poll} from '#testing/iframe';
 
 describes.realWin(
   'amp-sticky-ad 1.0 version',
@@ -62,8 +48,7 @@ describes.realWin(
           .callsFake(() => addToFixedLayerPromise);
       });
 
-      // TODO(#16916): Make this test work with synchronous throws.
-      it.skip('should listen to scroll event', function* () {
+      it('should listen to scroll event', function* () {
         const spy = env.sandbox.spy(impl, 'removeOnScrollListener_');
         expect(impl.scrollUnlisten_).to.be.null;
         yield macroTask();
@@ -75,7 +60,7 @@ describes.realWin(
         }
       });
 
-      it('should not build when scrollTop not greater than 1', () => {
+      it('should not build when scrollTop not greater than 1', async () => {
         const scheduleLayoutSpy = env.sandbox.spy(
           Services.ownersForDoc(impl.element),
           'scheduleLayout'
@@ -96,13 +81,10 @@ describes.realWin(
           return 300;
         };
         impl.onScroll_();
-        return new Promise((resolve) => {
-          setTimeout(resolve, 0);
-        }).then(() => {
-          expect(getScrollTopSpy).to.have.been.called;
-          expect(scheduleLayoutSpy).to.not.have.been.called;
-          expect(removeOnScrollListenerSpy).to.not.have.been.called;
-        });
+        await macroTask();
+        expect(getScrollTopSpy).to.have.been.called;
+        expect(scheduleLayoutSpy).to.not.have.been.called;
+        expect(removeOnScrollListenerSpy).to.not.have.been.called;
       });
 
       it('should display once user scroll', () => {
@@ -222,7 +204,7 @@ describes.realWin(
         const ad = impl.ad_;
         ad.signals().signal('built');
         await ad.signals().whenSignal('built');
-        await new Promise(setTimeout);
+        await macroTask();
         expect(layoutAdSpy).to.be.called;
         expect(ampStickyAd).to.not.have.attribute('visible');
 

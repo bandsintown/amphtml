@@ -1,28 +1,18 @@
-/**
- * Copyright 2019 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import objstr from 'obj-str';
+
+import {htmlFor} from '#core/dom/static-template';
+import {setStyle} from '#core/dom/style';
+
+import {LocalizedStringId_Enum} from '#service/localization/strings';
+
+import {localizeTemplate} from 'extensions/amp-story/1.0/amp-story-localization-service';
 
 import {
   AmpStoryInteractive,
   InteractiveType,
 } from './amp-story-interactive-abstract';
+
 import {CSS} from '../../../build/amp-story-interactive-quiz-0.1.css';
-import {LocalizedStringId} from '../../../src/localized-strings';
-import {htmlFor} from '../../../src/static-template';
-import {setStyle} from '../../../src/style';
-import objstr from 'obj-str';
 
 /**
  * Generates the template for the quiz.
@@ -95,17 +85,18 @@ export class AmpStoryInteractiveQuiz extends AmpStoryInteractive {
 
     // Localize the answer choice options
     this.localizedAnswerChoices_ = [
-      LocalizedStringId.AMP_STORY_INTERACTIVE_QUIZ_ANSWER_CHOICE_A,
-      LocalizedStringId.AMP_STORY_INTERACTIVE_QUIZ_ANSWER_CHOICE_B,
-      LocalizedStringId.AMP_STORY_INTERACTIVE_QUIZ_ANSWER_CHOICE_C,
-      LocalizedStringId.AMP_STORY_INTERACTIVE_QUIZ_ANSWER_CHOICE_D,
-    ].map((choice) => this.localizationService.getLocalizedString(choice));
+      LocalizedStringId_Enum.AMP_STORY_INTERACTIVE_QUIZ_ANSWER_CHOICE_A,
+      LocalizedStringId_Enum.AMP_STORY_INTERACTIVE_QUIZ_ANSWER_CHOICE_B,
+      LocalizedStringId_Enum.AMP_STORY_INTERACTIVE_QUIZ_ANSWER_CHOICE_C,
+      LocalizedStringId_Enum.AMP_STORY_INTERACTIVE_QUIZ_ANSWER_CHOICE_D,
+    ];
     const optionContainer = this.rootEl_.querySelector(
       '.i-amphtml-story-interactive-quiz-option-container'
     );
     this.options_.forEach((option, index) =>
       optionContainer.appendChild(this.configureOption_(option, index))
     );
+    localizeTemplate(optionContainer, this.element);
   }
 
   /**
@@ -125,7 +116,10 @@ export class AmpStoryInteractiveQuiz extends AmpStoryInteractive {
     const answerChoiceEl = convertedOption.querySelector(
       '.i-amphtml-story-interactive-quiz-answer-choice'
     );
-    answerChoiceEl.textContent = this.localizedAnswerChoices_[index];
+    answerChoiceEl.setAttribute(
+      'i-amphtml-i18n-text-content',
+      this.localizedAnswerChoices_[index]
+    );
     convertedOption.optionIndex_ = option['optionIndex'];
 
     // Extract and structure the option information

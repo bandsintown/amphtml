@@ -1,18 +1,3 @@
-/**
- * Copyright 2017 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 'use strict';
 
 /**
@@ -23,9 +8,8 @@ const argv = require('minimist')(process.argv.slice(2));
 const bacon = require('baconipsum');
 const bodyParser = require('body-parser');
 const cors = require('./amp-cors');
-const devDashboard = require('./app-index/index');
+const devDashboard = require('./app-index');
 const express = require('express');
-const fetch = require('node-fetch');
 const formidable = require('formidable');
 const fs = require('fs');
 const jsdom = require('jsdom');
@@ -36,6 +20,12 @@ const autocompleteEmailData = require('./autocomplete-test-data');
 const header = require('connect-header');
 const runVideoTestBench = require('./app-video-testbench');
 const {
+  getServeMode,
+  isRtvMode,
+  replaceUrls,
+  toInaboxDocument,
+} = require('./app-utils');
+const {
   getVariableRequest,
   runVariableSubstitution,
   saveVariableRequest,
@@ -45,12 +35,10 @@ const {
   recaptchaFrameRequestHandler,
   recaptchaRouter,
 } = require('./recaptcha-router');
-const {getServeMode} = require('./app-utils');
 const {logWithoutTimestamp} = require('../common/logging');
 const {log} = require('../common/logging');
 const {red} = require('kleur/colors');
 const {renderShadowViewer} = require('./shadow-viewer');
-const {replaceUrls, isRtvMode} = require('./app-utils');
 
 /**
  * Respond with content received from a URL when SERVE_MODE is "cdn".
@@ -84,10 +72,7 @@ app.use(bodyParser.text());
 // Middleware is executed in order, so this must be at the top.
 // TODO(#24333): Migrate all server URL handlers to new-server/router and
 // deprecate app.js.
-// TODO(erwinmombay, #32865): Make visual diff tests use the new server
-if (!argv._.includes('visual-diff')) {
-  app.use(require('./new-server/router'));
-}
+app.use(require('./new-server/router'));
 
 app.use(require('./routes/a4a-envelopes'));
 app.use('/amp4test', require('./amp4test').app);
@@ -107,7 +92,7 @@ app.use((req, res, next) => {
   if (req.query.csp) {
     res.set({
       'content-security-policy':
-        "default-src * blob: data:; script-src https://cdn.ampproject.org/rtv/ https://cdn.ampproject.org/v0.js https://cdn.ampproject.org/v0/ https://cdn.ampproject.org/viewer/ http://localhost:8000 https://localhost:8000; object-src 'none'; style-src 'unsafe-inline' https://cdn.ampproject.org/rtv/ https://cdn.materialdesignicons.com https://cloud.typography.com https://fast.fonts.net https://fonts.googleapis.com https://maxcdn.bootstrapcdn.com https://p.typekit.net https://use.fontawesome.com https://use.typekit.net; report-uri https://csp-collector.appspot.com/csp/amp",
+        "default-src * blob: data:; script-src https://cdn.ampproject.org/rtv/ https://cdn.ampproject.org/v0.js https://cdn.ampproject.org/v0/ https://cdn.ampproject.org/viewer/ http://localhost:8000 https://localhost:8000; object-src 'none'; style-src 'unsafe-inline' https://cdn.ampproject.org/rtv/ https://cdn.materialdesignicons.com https://cloud.typography.com https://fast.fonts.net https://fonts.googleapis.com https://maxcdn.bootstrapcdn.com https://p.typekit.net https://use.fontawesome.com https://use.typekit.net https://cdnjs.cloudflare.com/ajax/libs/font-awesome/; report-uri https://csp-collector.appspot.com/csp/amp",
     });
   }
   next();
@@ -120,7 +105,7 @@ app.use((req, res, next) => {
  */
 function isValidServeMode(serveMode) {
   return (
-    ['default', 'compiled', 'cdn', 'esm'].includes(serveMode) ||
+    ['default', 'minified', 'cdn', 'esm'].includes(serveMode) ||
     isRtvMode(serveMode)
   );
 }
@@ -145,7 +130,7 @@ app.get('/serve_mode=:mode', (req, res) => {
 });
 
 if (argv._.includes('integration') && !argv.nobuild) {
-  setServeMode('compiled');
+  setServeMode('minified');
 }
 
 if (!(argv._.includes('unit') || argv._.includes('integration'))) {
@@ -154,7 +139,7 @@ if (!(argv._.includes('unit') || argv._.includes('integration'))) {
 }
 
 // Changes the current serve mode via query param
-// e.g. /serve_mode_change?mode=(default|compiled|cdn|<RTV_NUMBER>)
+// e.g. /serve_mode_change?mode=(default|minified|cdn|<RTV_NUMBER>)
 // (See ./app-index/settings.js)
 app.get('/serve_mode_change', (req, res) => {
   const {mode} = req.query;
@@ -518,6 +503,7 @@ app.use('/form/verify-search-json/post', (req, res) => {
  * @param {express.Request} req
  * @param {express.Response} res
  * @param {string} mode
+ * @return {Promise<void>}
  */
 async function proxyToAmpProxy(req, res, mode) {
   const url =
@@ -558,12 +544,13 @@ async function proxyToAmpProxy(req, res, mode) {
           ' </script>'
       );
   }
-  body = replaceUrls(mode, body, urlPrefix, inabox);
   if (inabox) {
+    body = toInaboxDocument(body);
     // Allow CORS requests for A4A.
     const origin = req.headers.origin || urlPrefix;
     cors.enableCors(req, res, origin);
   }
+  body = replaceUrls(mode, body, urlPrefix);
   res.status(urlResponse.status).send(body);
 }
 
@@ -573,7 +560,7 @@ const liveListDocs = Object.create(null);
 app.use('/examples/live-list-update(-reverse)?.amp.html', (req, res, next) => {
   const mode = SERVE_MODE;
   let liveListDoc = liveListDocs[req.baseUrl];
-  if (mode != 'compiled' && mode != 'default') {
+  if (mode != 'minified' && mode != 'default') {
     // Only handle compile(prev min)/default (prev max) mode
     next();
     return;
@@ -662,7 +649,7 @@ function liveListInsert(liveList, node) {
      */
     const child = /** @type {*} */ (node.cloneNode(true));
     child.setAttribute('id', `list-item-${itemCtr++}`);
-    child.setAttribute('data-sort-time', Date.now());
+    child.setAttribute('data-sort-time', Date.now().toString());
     liveList.querySelector('[items]')?.appendChild(child);
   }
 }
@@ -1044,12 +1031,15 @@ app.get(
           file = file.replace(/-latest.js/g, `-${componentVersion}.js`);
         }
 
-        if (inabox && req.headers.origin) {
+        if (inabox) {
+          file = toInaboxDocument(file);
           // Allow CORS requests for A4A.
-          cors.enableCors(req, res, req.headers.origin);
-        } else {
-          file = replaceUrls(mode, file, '', inabox);
+          if (req.headers.origin) {
+            cors.enableCors(req, res, req.headers.origin);
+          }
         }
+
+        file = replaceUrls(mode, file);
 
         const ampExperimentsOptIn = req.query['exp'];
         if (ampExperimentsOptIn) {
@@ -1342,7 +1332,7 @@ app.use('/subscription/register', (req, res) => {
   meteringStateStore[req.body.ampReaderId] = {
     id: meteringStateId,
     standardAttributes: {
-      // eslint-disable-next-line google-camelcase/google-camelcase
+      // eslint-disable-next-line local/camelcase
       registered_user: {
         timestamp: registrationTimestamp, // In seconds.
       },
@@ -1409,6 +1399,19 @@ app.get(
   }
 );
 
+/**
+ * Handle amp-story translation file requests with an rtv path.
+ * We need to make sure we only handle the amp-story requests since this
+ * can affect other tests with json requests.
+ */
+app.get('/dist/rtv/*/v0/amp-story*.json', async (req, _res, next) => {
+  const fileName = path.basename(req.path);
+  let filePath = 'https://cdn.ampproject.org/v0/' + fileName;
+  filePath = replaceUrls(SERVE_MODE, filePath);
+  req.url = filePath;
+  next();
+});
+
 if (argv.coverage === 'live') {
   app.get('/dist/amp.js', async (req, res) => {
     const ampJs = await fs.promises.readFile(`${pc.cwd()}${req.path}`);
@@ -1434,7 +1437,7 @@ window.addEventListener('beforeunload', (evt) => {
 }
 
 app.get('/dist/ww.(m?js)', async (req, res, next) => {
-  // Special case for entry point script url. Use compiled for testing
+  // Special case for entry point script url. Use minified for testing
   const mode = SERVE_MODE;
   const fileName = path.basename(req.path);
   if (await passthroughServeModeCdn(res, fileName)) {
@@ -1551,7 +1554,7 @@ function generateInfo(filePath) {
     '<h3></h3>' +
     '<h3><a href = /serve_mode=default>' +
     'Change to DEFAULT mode (unminified JS)</a></h3>' +
-    '<h3><a href = /serve_mode=compiled>' +
+    '<h3><a href = /serve_mode=minified>' +
     'Change to COMPILED mode (minified JS)</a></h3>' +
     '<h3><a href = /serve_mode=cdn>' +
     'Change to CDN mode (prod JS)</a></h3>'
@@ -1560,7 +1563,7 @@ function generateInfo(filePath) {
 
 /**
  * @param {string} encryptedDocumentKey
- * @return {string|null}
+ * @return {?string}
  */
 function decryptDocumentKey(encryptedDocumentKey) {
   if (!encryptedDocumentKey) {

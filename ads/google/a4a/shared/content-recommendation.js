@@ -1,20 +1,4 @@
 /**
- * Copyright 2019 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-/**
  * @fileoverview CoRe responsive functions that are shared with Google tag code.
  * This file must not depend on any AMP-specific libraries, e.g. log. If
  * there is a need to pass any things for logging/reporting - the values
@@ -79,7 +63,7 @@ const MAX_PUB_CONTROL_DIMENSION = 1500;
  * image_card_sidebyside: https://screenshot.googleplex.com/v3qOZY61tFm
  * text: https://screenshot.googleplex.com/taeRQn7DUhq
  * text_card: https://screenshot.googleplex.com/ur45m96Tv0D
- * @const {!Object<!LayoutType, number>}
+ * @const {!{[key: !LayoutType]: number}}
  */
 const LAYOUT_ASPECT_RATIO_MAP = {
   [LayoutType.IMAGE_STACKED]: 1 / 1.91,
@@ -100,7 +84,7 @@ const LAYOUT_ASPECT_RATIO_MAP = {
  * FontSize * LineHeight * NumTitle + Padding * 2 + UrlBoxHeight.
  * image_stacked: https://screenshot.googleplex.com/74S09gFO82b
  * image_card_stacked: https://screenshot.googleplex.com/vedjTonVaDT
- * @const {!Object<!LayoutType, number>}
+ * @const {!{[key: !LayoutType]: number}}
  */
 const LAYOUT_TEXT_HEIGHT_MAP = {
   [LayoutType.IMAGE_STACKED]: 80,
@@ -117,7 +101,7 @@ const LAYOUT_TEXT_HEIGHT_MAP = {
 /**
  * The layout - minimal width map for pub control UIs. We will adjust column
  * numbers according to minimal width.
- * @const {!Object<!LayoutType, number>}
+ * @const {!{[key: !LayoutType]: number}}
  */
 const LAYOUT_AD_WIDTH_MAP = {
   [LayoutType.PUB_CONTROL_IMAGE_STACKED]: 100,
@@ -342,9 +326,8 @@ function validateAndParsePubControlParams(params) {
 
   const /** !Array<!LayoutType> */ layoutTypes = params.layoutType.split(',');
   const /** !Array<string> */ numberOfRows = params.numberOfRows.split(',');
-  const /** !Array<string> */ numberOfColumns = params.numberOfColumns.split(
-      ','
-    );
+  const /** !Array<string> */ numberOfColumns =
+      params.numberOfColumns.split(',');
 
   // Check all params have same length.
   if (

@@ -1,32 +1,21 @@
-/**
- * Copyright 2020 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-import {AmpDocSingle} from '../../../../src/service/ampdoc-impl';
+import {Deferred} from '#core/data-structures/promise';
+import {layoutRectLtwh} from '#core/dom/layout/rect';
+import {scopedQuerySelectorAll} from '#core/dom/query';
+import {htmlFor, htmlRefs} from '#core/dom/static-template';
+import {toArray} from '#core/types/array';
+
+import {Services} from '#service';
+import {AmpDocSingle} from '#service/ampdoc-impl';
+
+import {macroTask} from '#testing/helpers';
+
+import {WebAnimationPlayState} from '../../../amp-animation/0.1/web-animation-types';
 import {
   AnimationManager,
   AnimationRunner,
   AnimationSequence,
 } from '../animation';
-import {Deferred} from '../../../../src/core/data-structures/promise';
-import {Services} from '../../../../src/services';
-import {WebAnimationPlayState} from '../../../amp-animation/0.1/web-animation-types';
-import {htmlFor, htmlRefs} from '../../../../src/static-template';
-import {layoutRectLtwh} from '../../../../src/layout-rect';
 import {presets} from '../animation-presets';
-import {scopedQuerySelectorAll} from '../../../../src/dom';
-import {toArray} from '../../../../src/core/types/array';
 
 const querySelectorAllAnimateIn = (element) =>
   toArray(scopedQuerySelectorAll(element, '[animate-in]'));
@@ -34,9 +23,6 @@ const querySelectorAllAnimateIn = (element) =>
 describes.realWin('amp-story animations', {}, (env) => {
   let html;
   let ampdoc;
-
-  const nextTick = () =>
-    new Promise((resolve) => env.win.setTimeout(resolve, 0));
 
   beforeEach(() => {
     html = htmlFor(env.win.document);
@@ -234,7 +220,7 @@ describes.realWin('amp-story animations', {}, (env) => {
         sequence
       );
 
-      await nextTick();
+      await macroTask();
 
       expect(
         webAnimationBuilder.createRunner.withArgs(
@@ -279,7 +265,7 @@ describes.realWin('amp-story animations', {}, (env) => {
         sequence
       );
 
-      await nextTick();
+      await macroTask();
 
       expect(webAnimationBuilder.createRunner.withArgs(spec)).to.have.been
         .calledOnce;
@@ -317,7 +303,7 @@ describes.realWin('amp-story animations', {}, (env) => {
 
       runner.start();
 
-      await nextTick();
+      await macroTask();
       expect(webAnimationRunner.start).to.have.been.calledOnce;
     });
 
@@ -335,7 +321,7 @@ describes.realWin('amp-story animations', {}, (env) => {
 
       webAnimationBuilder.createRunner = () => webAnimationRunner;
 
-      const {resolve: resolveWaitFor, promise} = new Deferred();
+      const {promise, resolve: resolveWaitFor} = new Deferred();
       sequence.waitFor = env.sandbox.spy(() => promise);
 
       const runner = new AnimationRunner(
@@ -359,14 +345,14 @@ describes.realWin('amp-story animations', {}, (env) => {
 
       runner.start();
 
-      await nextTick();
+      await macroTask();
 
       expect(sequence.waitFor.withArgs(startAfterId)).to.have.been.calledOnce;
       expect(webAnimationRunner.start).to.not.have.been.called;
 
       resolveWaitFor();
 
-      await nextTick();
+      await macroTask();
 
       expect(webAnimationRunner.start).to.have.been.calledOnce;
     });
@@ -407,7 +393,7 @@ describes.realWin('amp-story animations', {}, (env) => {
         sequence
       );
 
-      await nextTick();
+      await macroTask();
 
       expect(sequence.notifyFinish).to.not.have.been.called;
 
@@ -453,7 +439,7 @@ describes.realWin('amp-story animations', {}, (env) => {
     it('creates WebAnimation Builder with options', async () => {
       const page = html`<div></div>`;
       new AnimationManager(page, ampdoc);
-      await nextTick();
+      await macroTask();
       expect(
         webAnimationService.createBuilder.withArgs(
           env.sandbox.match({
@@ -474,7 +460,7 @@ describes.realWin('amp-story animations', {}, (env) => {
       `;
 
       const animationManager = new AnimationManager(page, ampdoc);
-      await animationManager.applyFirstFrame();
+      await animationManager.applyFirstFrameOrFinish();
 
       querySelectorAllAnimateIn(page).forEach((target) => {
         const preset = presets[target.getAttribute('animate-in')];
@@ -482,7 +468,7 @@ describes.realWin('amp-story animations', {}, (env) => {
           createAnimationRunner.withArgs(
             page,
             env.sandbox.match({source: target, preset, spec: {target}}),
-            webAnimationBuilderPromise,
+            env.sandbox.match.any,
             env.sandbox.match.any,
             env.sandbox.match.any
           )
@@ -510,13 +496,13 @@ describes.realWin('amp-story animations', {}, (env) => {
       spec2source.firstElementChild.textContent = JSON.stringify(spec2);
 
       const animationManager = new AnimationManager(page, ampdoc);
-      await animationManager.applyFirstFrame();
+      await animationManager.applyFirstFrameOrFinish();
 
       expect(
         createAnimationRunner.withArgs(
           page,
           env.sandbox.match({source: spec1source, spec: spec1}),
-          webAnimationBuilderPromise,
+          env.sandbox.match.any,
           env.sandbox.match.any,
           env.sandbox.match.any
         )
@@ -526,7 +512,7 @@ describes.realWin('amp-story animations', {}, (env) => {
         createAnimationRunner.withArgs(
           page,
           env.sandbox.match({source: spec2source, spec: spec2}),
-          webAnimationBuilderPromise,
+          env.sandbox.match.any,
           env.sandbox.match.any,
           env.sandbox.match.any
         )
@@ -542,7 +528,7 @@ describes.realWin('amp-story animations', {}, (env) => {
         `,
         ampdoc
       );
-      await animationManager.applyFirstFrame();
+      await animationManager.applyFirstFrameOrFinish();
       expect(createAnimationRunner).to.not.have.been.called;
     });
 
@@ -589,9 +575,9 @@ describes.realWin('amp-story animations', {}, (env) => {
       });
 
       const animationManager = new AnimationManager(page, ampdoc);
-      await animationManager.applyFirstFrame();
+      await animationManager.applyFirstFrameOrFinish();
 
-      targetsWithOptions.forEach(({target, expectedOptions}) => {
+      targetsWithOptions.forEach(({expectedOptions, target}) => {
         expect(
           createAnimationRunner.withArgs(
             page,
@@ -620,7 +606,7 @@ describes.realWin('amp-story animations', {}, (env) => {
         </div>
       `;
       const animationManager = new AnimationManager(page, ampdoc);
-      await animationManager.applyFirstFrame();
+      await animationManager.applyFirstFrameOrFinish();
       expect(runner.applyFirstFrame).to.have.callCount(
         querySelectorAllAnimateIn(page).length
       );
@@ -637,7 +623,7 @@ describes.realWin('amp-story animations', {}, (env) => {
 
       env.win.document.body.appendChild(page);
       const animationManager = new AnimationManager(page, ampdoc);
-      await animationManager.applyFirstFrame();
+      await animationManager.applyFirstFrameOrFinish();
 
       expect(
         createAnimationRunner.withArgs(
@@ -666,7 +652,7 @@ describes.realWin('amp-story animations', {}, (env) => {
 
       env.win.document.body.appendChild(page);
       const animationManager = new AnimationManager(page, ampdoc);
-      await animationManager.applyFirstFrame();
+      await animationManager.applyFirstFrameOrFinish();
 
       expect(
         createAnimationRunner.withArgs(
@@ -713,17 +699,13 @@ describes.realWin('amp-story animations', {}, (env) => {
           </amp-story-animation>
         </div>
       `;
-      const {
-        animatedFirst,
-        animatedSecond,
-        animatedThird,
-        animatedFourth,
-      } = htmlRefs(page);
+      const {animatedFirst, animatedFourth, animatedSecond, animatedThird} =
+        htmlRefs(page);
 
       env.win.document.body.appendChild(page);
 
       const animationManager = new AnimationManager(page, ampdoc);
-      await animationManager.applyFirstFrame();
+      await animationManager.applyFirstFrameOrFinish();
 
       expect(
         createAnimationRunner.withArgs(
@@ -805,7 +787,7 @@ describes.realWin('amp-story animations', {}, (env) => {
 
         runner[runnerMethod] = env.sandbox.spy();
         const animationManager = new AnimationManager(page, ampdoc);
-        await animationManager.applyFirstFrame();
+        await animationManager.applyFirstFrameOrFinish();
         animationManager[managerMethod]();
         expect(runner[runnerMethod]).to.have.callCount(
           querySelectorAllAnimateIn(page).length
@@ -820,11 +802,11 @@ describes.realWin('amp-story animations', {}, (env) => {
       const notified = env.sandbox.spy();
 
       sequence.waitFor('test-notify-id').then(notified);
-      await nextTick();
+      await macroTask();
       expect(notified).to.not.have.been.called;
 
       sequence.notifyFinish('test-notify-id');
-      await nextTick();
+      await macroTask();
       expect(notified).to.have.been.calledOnce;
     });
 
@@ -833,16 +815,16 @@ describes.realWin('amp-story animations', {}, (env) => {
       const notified = env.sandbox.spy();
 
       sequence.waitFor('test-notify-id').then(notified);
-      await nextTick();
+      await macroTask();
 
       sequence.notifyFinish('test-notify-id');
-      await nextTick();
+      await macroTask();
 
       sequence.notifyFinish('test-notify-id');
-      await nextTick();
+      await macroTask();
 
       sequence.notifyFinish('test-notify-id');
-      await nextTick();
+      await macroTask();
 
       expect(notified).to.have.been.calledOnce;
     });
@@ -852,11 +834,11 @@ describes.realWin('amp-story animations', {}, (env) => {
       const notified = env.sandbox.spy();
 
       sequence.waitFor('test-notify-id').then(notified);
-      await nextTick();
+      await macroTask();
       expect(notified).to.not.have.been.called;
 
       sequence.notifyFinish('a-different-test-notify-id');
-      await nextTick();
+      await macroTask();
       expect(notified).to.not.have.been.called;
     });
   });

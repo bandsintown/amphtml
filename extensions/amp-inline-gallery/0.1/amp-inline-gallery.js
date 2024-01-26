@@ -1,38 +1,21 @@
-/**
- * Copyright 2019 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {Layout_Enum} from '#core/dom/layout';
+import {scopedQuerySelector, scopedQuerySelectorAll} from '#core/dom/query';
+import {toArray} from '#core/types/array';
+
+import {getDetail} from '#utils/event-helper';
+
+import {AmpInlineGalleryCaptions} from './amp-inline-gallery-captions';
+import {AmpInlineGalleryPagination} from './amp-inline-gallery-pagination';
+import {AmpInlineGallerySlide} from './amp-inline-gallery-slide';
+import {AmpInlineGalleryThumbnails} from './amp-inline-gallery-thumbnails';
+import {InlineGalleryEvents} from './inline-gallery-events';
 
 import {CSS as AmpInlineGalleryCSS} from '../../../build/amp-inline-gallery-0.1.css';
-import {AmpInlineGalleryCaptions} from './amp-inline-gallery-captions';
 import {CSS as AmpInlineGalleryCaptionsCSS} from '../../../build/amp-inline-gallery-captions-0.1.css';
-import {AmpInlineGalleryPagination} from './amp-inline-gallery-pagination';
 import {CSS as AmpInlineGalleryPaginationCSS} from '../../../build/amp-inline-gallery-pagination-0.1.css';
-import {AmpInlineGallerySlide} from './amp-inline-gallery-slide';
 import {CSS as AmpInlineGallerySlideCSS} from '../../../build/amp-inline-gallery-slide-0.1.css';
-import {AmpInlineGalleryThumbnails} from './amp-inline-gallery-thumbnails';
 import {CSS as AmpInlineGalleryThumbnailsCSS} from '../../../build/amp-inline-gallery-thumbnails-0.1.css';
 import {CarouselEvents} from '../../amp-base-carousel/0.1/carousel-events';
-import {InlineGalleryEvents} from './inline-gallery-events';
-import {Layout} from '../../../src/layout';
-import {getDetail} from '../../../src/event-helper';
-import {
-  iterateCursor,
-  scopedQuerySelector,
-  scopedQuerySelectorAll,
-} from '../../../src/dom';
-import {toArray} from '../../../src/core/types/array';
 
 /**
  * The selector of children to update the progress on as the gallery's carousel
@@ -53,7 +36,7 @@ const CAROUSEL_SELECTOR =
   '> amp-base-carousel, :not(amp-inline-gallery-thumbnails) > amp-base-carousel';
 
 class AmpInlineGallery extends AMP.BaseElement {
-  /** @override @nocollapse */
+  /** @override  */
   static prerenderAllowed() {
     return true;
   }
@@ -82,9 +65,9 @@ class AmpInlineGallery extends AMP.BaseElement {
     Promise.all([
       scopedQuerySelector(this.element, CAROUSEL_SELECTOR).getImpl(),
       Promise.all(
-        toArray(
-          scopedQuerySelectorAll(this.element, THUMBNAILS_SELECTORS)
-        ).map((el) => el.getImpl())
+        toArray(scopedQuerySelectorAll(this.element, THUMBNAILS_SELECTORS)).map(
+          (el) => el.getImpl()
+        )
       ),
     ]).then((data) => {
       const carouselImpl = data[0];
@@ -97,7 +80,7 @@ class AmpInlineGallery extends AMP.BaseElement {
 
   /** @override */
   isLayoutSupported(layout) {
-    return layout === Layout.CONTAINER;
+    return layout === Layout_Enum.CONTAINER;
   }
 
   /**
@@ -108,14 +91,14 @@ class AmpInlineGallery extends AMP.BaseElement {
    * @private
    */
   updateProgress_(total, index, offset, slides) {
-    iterateCursor(
-      scopedQuerySelectorAll(this.element, CHILDREN_FOR_PROGRESS_SELECTOR),
-      (el) => {
-        el.getImpl().then((pagination) => {
-          pagination.updateProgress(total, index, offset, slides);
-        });
-      }
-    );
+    scopedQuerySelectorAll(
+      this.element,
+      CHILDREN_FOR_PROGRESS_SELECTOR
+    ).forEach((el) => {
+      el.getImpl().then((pagination) => {
+        pagination.updateProgress(total, index, offset, slides);
+      });
+    });
   }
 
   /**
@@ -153,14 +136,11 @@ class AmpInlineGallery extends AMP.BaseElement {
     const detail = getDetail(event);
     const index = detail['index'];
 
-    iterateCursor(
-      scopedQuerySelectorAll(this.element, CAROUSEL_SELECTOR),
-      (el) => {
-        el.getImpl().then((carousel) => {
-          carousel.goToSlide(index, {smoothScroll: true});
-        });
-      }
-    );
+    scopedQuerySelectorAll(this.element, CAROUSEL_SELECTOR).forEach((el) => {
+      el.getImpl().then((carousel) => {
+        carousel.goToSlide(index, {smoothScroll: true});
+      });
+    });
   }
 }
 

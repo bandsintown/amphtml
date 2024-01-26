@@ -7,7 +7,6 @@
       owners: [
         {
           name: 'gmajoulet',
-          notify: true,
         },
         {
           name: 'newmuis',
@@ -15,7 +14,6 @@
         },
         {
           name: 'enriqe',
-          notify: true,
         },
         {
           name: 'processprocess',

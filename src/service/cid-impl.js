@@ -1,20 +1,4 @@
 /**
- * Copyright 2015 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-/**
  * @fileoverview Provides per AMP document source origin and use case
  * persistent client identifiers for use in analytics and similar use
  * cases.
@@ -22,22 +6,27 @@
  * For details, see https://goo.gl/Mwaacs
  */
 
+import {tryResolve} from '#core/data-structures/promise';
+import {isIframed} from '#core/dom';
+import {rethrowAsync} from '#core/error';
+import {parseJson, tryParseJson} from '#core/types/object/json';
+import {base64UrlEncodeFromBytes} from '#core/types/string/base64';
+import {getCryptoRandomBytesArray} from '#core/types/string/bytes';
+
+import {Services} from '#service';
+
+import {dev, user, userAssert} from '#utils/log';
+
 import {CacheCidApi} from './cache-cid-api';
-import {GoogleCidApi, TokenStatus} from './cid-api';
-import {Services} from '../services';
+import {GoogleCidApi, TokenStatus_Enum} from './cid-api';
 import {ViewerCidApi} from './viewer-cid-api';
-import {base64UrlEncodeFromBytes} from '../utils/base64';
-import {dev, user, userAssert} from '../log';
-import {dict} from '../core/types/object';
+
 import {getCookie, setCookie} from '../cookies';
-import {getCryptoRandomBytesArray} from '../utils/bytes';
-import {getServiceForDoc, registerServiceBuilderForDoc} from '../service';
+import {
+  getServiceForDoc,
+  registerServiceBuilderForDoc,
+} from '../service-helpers';
 import {getSourceOrigin, isProxyOrigin, parseUrlDeprecated} from '../url';
-import {isExperimentOn} from '../../src/experiments';
-import {isIframed} from '../dom';
-import {parseJson, tryParseJson} from '../json';
-import {rethrowAsync} from '../core/error';
-import {tryResolve} from '../core/data-structures/promise';
 
 const ONE_DAY_MILLIS = 24 * 3600 * 1000;
 
@@ -68,7 +57,7 @@ const GOOGLE_CID_API_META_NAME = 'amp-google-client-id-api';
 
 /**
  * The mapping from analytics providers to CID scopes.
- * @const @private {Object<string, string>}
+ * @const @private {{[key: string]: string}}
  */
 const CID_API_SCOPE_ALLOWLIST = {
   'googleanalytics': 'AMP_ECID_GOOGLE',
@@ -76,7 +65,7 @@ const CID_API_SCOPE_ALLOWLIST = {
 
 /**
  * The mapping from analytics providers to their CID API service keys.
- * @const @private {Object<string, string>}
+ * @const @private {{[key: string]: string}}
  */
 const API_KEYS = {
   'googleanalytics': 'AIzaSyA65lEHUEizIsNtlbNo-l2K18dT680nsaM',
@@ -161,7 +150,7 @@ class Cid {
     /**
      * Cache to store external cids. Scope is used as the key and cookie value
      * is the value.
-     * @private {!Object<string, !Promise<string>>}
+     * @private {!{[key: string]: !Promise<string>}}
      * @restricted
      */
     this.externalCidCache_ = Object.create(null);
@@ -178,11 +167,8 @@ class Cid {
 
     this.cidApi_ = new GoogleCidApi(ampdoc);
 
-    /** @private {?Object<string, string>} */
+    /** @private {?{[key: string]: string}} */
     this.apiKeyMap_ = null;
-
-    /** @const {boolean} */
-    this.isBackupCidExpOn = isExperimentOn(this.ampdoc.win, 'amp-cid-backup');
   }
 
   /** @override */
@@ -245,7 +231,7 @@ class Cid {
       const apiKey = this.isScopeOptedIn_(scope);
       if (apiKey) {
         return this.cidApi_.getScopedCid(apiKey, scope).then((scopedCid) => {
-          if (scopedCid == TokenStatus.OPT_OUT) {
+          if (scopedCid == TokenStatus_Enum.OPT_OUT) {
             return null;
           }
           if (scopedCid) {
@@ -309,7 +295,7 @@ class Cid {
   /**
    * Reads meta tags for opted in scopes.  Meta tags will have the form
    * <meta name="provider-api-name" content="provider-name">
-   * @return {!Object<string, string>}
+   * @return {!{[key: string]: string}}
    */
   getOptedInScopes_() {
     const apiKeyMap = {};
@@ -352,7 +338,7 @@ export function optOutOfCid(ampdoc) {
   // Tell the viewer that user has opted out.
   Services.viewerForDoc(ampdoc)./*OK*/ sendMessage(
     CID_OPTOUT_VIEWER_MESSAGE,
-    dict()
+    {}
   );
 
   // Store the optout bit in storage
@@ -424,7 +410,7 @@ function getStorageKey(cookieName) {
  * @return {!Promise<?string>}
  */
 function maybeGetCidFromCookieOrBackup(cid, getCidStruct) {
-  const {ampdoc, isBackupCidExpOn} = cid;
+  const {ampdoc} = cid;
   const {win} = ampdoc;
   const {disableBackup, scope} = getCidStruct;
   const cookieName = getCidStruct.cookieName || scope;
@@ -433,7 +419,7 @@ function maybeGetCidFromCookieOrBackup(cid, getCidStruct) {
   if (existingCookie) {
     return Promise.resolve(existingCookie);
   }
-  if (isBackupCidExpOn && !disableBackup) {
+  if (!disableBackup) {
     return Services.storageForDoc(ampdoc)
       .then((storage) => {
         const key = getStorageKey(cookieName);
@@ -458,9 +444,9 @@ function maybeGetCidFromCookieOrBackup(cid, getCidStruct) {
  * @return {!Promise<?string>}
  */
 function getOrCreateCookie(cid, getCidStruct, persistenceConsent) {
-  const {isBackupCidExpOn, ampdoc} = cid;
+  const {ampdoc} = cid;
   const {win} = ampdoc;
-  const {scope, disableBackup} = getCidStruct;
+  const {disableBackup, scope} = getCidStruct;
   const cookieName = getCidStruct.cookieName || scope;
 
   return maybeGetCidFromCookieOrBackup(cid, getCidStruct).then(
@@ -473,13 +459,13 @@ function getOrCreateCookie(cid, getCidStruct, persistenceConsent) {
         // If we created the cookie, update it's expiration time.
         if (/^amp-/.test(existingCookie)) {
           setCidCookie(win, cookieName, existingCookie);
-          if (isBackupCidExpOn && !disableBackup) {
+          if (!disableBackup) {
             setCidBackup(ampdoc, cookieName, existingCookie);
           }
         }
-        return /** @type {!Promise<?string>} */ (Promise.resolve(
-          existingCookie
-        ));
+        return /** @type {!Promise<?string>} */ (
+          Promise.resolve(existingCookie)
+        );
       }
 
       if (cid.externalCidCache_[scope]) {
@@ -499,7 +485,7 @@ function getOrCreateCookie(cid, getCidStruct, persistenceConsent) {
         const relookup = getCookie(win, cookieName);
         if (!relookup) {
           setCidCookie(win, cookieName, newCookie);
-          if (isBackupCidExpOn && !disableBackup) {
+          if (!disableBackup) {
             setCidBackup(ampdoc, cookieName, newCookie);
           }
         }
@@ -611,12 +597,10 @@ export function viewerBaseCid(ampdoc, opt_data) {
       if (data && !tryParseJson(data)) {
         // TODO(lannka, #11060): clean up when all Viewers get migrated
         dev().expectedError('CID', 'invalid cid format');
-        return JSON.stringify(
-          dict({
-            'time': Date.now(), // CID returned from old API is always fresh
-            'cid': data,
-          })
-        );
+        return JSON.stringify({
+          'time': Date.now(), // CID returned from old API is always fresh
+          'cid': data,
+        });
       }
       return data;
     });
@@ -630,12 +614,10 @@ export function viewerBaseCid(ampdoc, opt_data) {
  * @return {string}
  */
 function createCidData(cidString) {
-  return JSON.stringify(
-    dict({
-      'time': Date.now(),
-      'cid': cidString,
-    })
-  );
+  return JSON.stringify({
+    'time': Date.now(),
+    'cid': cidString,
+  });
 }
 
 /**

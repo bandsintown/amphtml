@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import {loadScript} from '../../3p/3p';
+import {loadScript} from '#3p/3p';
 
 /**
  * @param {!Window} global
@@ -82,10 +82,13 @@ export function nativo(global, data) {
      */
     function loadAdWhenTimedout() {
       const g = global;
-      setTimeout(function () {
-        g.PostRelease.Start();
-        delayedAdLoad = true;
-      }, parseInt(data.delayByTime, 10));
+      setTimeout(
+        function () {
+          g.PostRelease.Start();
+          delayedAdLoad = true;
+        },
+        parseInt(data.delayByTime, 10)
+      );
     }
     /**
      * @param {*} positions

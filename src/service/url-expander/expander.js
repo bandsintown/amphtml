@@ -1,24 +1,9 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {tryResolve} from '#core/data-structures/promise';
+import {rethrowAsync} from '#core/error';
+import {hasOwn} from '#core/types/object';
+import {trimStart} from '#core/types/string';
 
-import {hasOwn} from '../../core/types/object';
-import {rethrowAsync} from '../../core/error';
-import {trimStart} from '../../core/types/string';
-import {tryResolve} from '../../core/data-structures/promise';
-import {user} from '../../log';
+import {user} from '#utils/log';
 
 /** @private @const {string} */
 const PARSER_IGNORE_FLAG = '`';
@@ -52,11 +37,11 @@ export class Expander {
   /**
    * Link this instance of parser to the calling UrlReplacment
    * @param {?../variable-source.VariableSource} variableSource the keywords to replace
-   * @param {!Object<string, *>=} opt_bindings additional one-off bindings
-   * @param {!Object<string, *>=} opt_collectVars Object passed in to collect
+   * @param {!{[key: string]: *}=} opt_bindings additional one-off bindings
+   * @param {!{[key: string]: *}=} opt_collectVars Object passed in to collect
    *   variable resolutions.
    * @param {boolean=} opt_sync If the method should resolve syncronously.
-   * @param {!Object<string, boolean>=} opt_allowlist Optional allowlist of names
+   * @param {!{[key: string]: boolean}=} opt_allowlist Optional allowlist of names
    *   that can be substituted.
    * @param {boolean=} opt_noEncode Should not urlEncode macro resolution.
    */
@@ -71,17 +56,17 @@ export class Expander {
     /** @const {?../variable-source.VariableSource} */
     this.variableSource_ = variableSource;
 
-    /**@const {!Object<string, *>|undefined} */
+    /**@const {!{[key: string]: *}|undefined} */
     this.bindings_ = opt_bindings;
 
     // TODO(ccordry): Remove this output object passed into constructor.
-    /**@const {!Object<string, *>|undefined} */
+    /**@const {!{[key: string]: *}|undefined} */
     this.collectVars_ = opt_collectVars;
 
     /**@const {boolean|undefined} */
     this.sync_ = opt_sync;
 
-    /**@const {!Object<string, boolean>|undefined} */
+    /**@const {!{[key: string]: boolean}|undefined} */
     this.allowlist_ = opt_allowlist;
 
     /**@const {boolean|undefined} */
@@ -333,11 +318,9 @@ export class Expander {
       const result = this.evaluateBindingSync_(binding, name, opt_args);
       return encode ? encodeURIComponent(result) : result;
     } else {
-      return this.evaluateBindingAsync_(
-        binding,
-        name,
-        opt_args
-      ).then((result) => (encode ? encodeURIComponent(result) : result));
+      return this.evaluateBindingAsync_(binding, name, opt_args).then(
+        (result) => (encode ? encodeURIComponent(result) : result)
+      );
     }
   }
 

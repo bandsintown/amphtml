@@ -1,25 +1,11 @@
-/**
- * Copyright 2019 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {Layout_Enum} from '#core/dom/layout';
+import {htmlFor} from '#core/dom/static-template';
 
-import {Layout} from '../../../src/layout';
-import {Services} from '../../../src/services';
-import {htmlFor} from '../../../src/static-template';
-import {isExperimentOn} from '../../../src/experiments';
-import {toArray} from '../../../src/core/types/array';
-import {userAssert} from '../../../src/log';
+import {isExperimentOn} from '#experiments';
+
+import {Services} from '#service';
+
+import {userAssert} from '#utils/log';
 
 export class AmpInlineGallerySlide extends AMP.BaseElement {
   /**
@@ -83,7 +69,7 @@ export class AmpInlineGallerySlide extends AMP.BaseElement {
 
   /** @override */
   isLayoutSupported() {
-    return Layout.FLEX_ITEM;
+    return Layout_Enum.FLEX_ITEM;
   }
 
   /** @override */
@@ -98,23 +84,17 @@ export class AmpInlineGallerySlide extends AMP.BaseElement {
     const attributionSlot = dom.querySelector(
       '.i-amphtml-inline-gallery-slide-persistent-slot'
     );
-    const childNodesArray = toArray(this.element.childNodes);
 
-    childNodesArray
-      .filter((n) => {
-        return n.hasAttribute && n.getAttribute('slot') === 'caption';
-      })
-      .forEach((node) => captionSlot.appendChild(node));
-    childNodesArray
-      .filter((n) => {
-        return !n.hasAttribute || !n.hasAttribute('slot');
-      })
-      .forEach((node) => contentSlot.appendChild(node));
-    childNodesArray
-      .filter((n) => {
-        return n.hasAttribute && n.getAttribute('slot') === 'attribution';
-      })
-      .forEach((node) => attributionSlot.appendChild(node));
+    this.element.childNodes.forEach((node) => {
+      const slot = node.getAttribute?.('slot');
+      if (slot === 'caption') {
+        captionSlot.appendChild(node);
+      } else if (slot === 'attribution') {
+        attributionSlot.appendChild(node);
+      } else if (slot == null) {
+        contentSlot.appendChild(node);
+      }
+    });
 
     this.element.appendChild(dom);
   }

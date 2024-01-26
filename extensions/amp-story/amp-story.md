@@ -6,22 +6,6 @@ teaser:
   text: A rich, visual storytelling format.
 ---
 
-<!--
-Copyright 2017 The AMP HTML Authors. All Rights Reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS-IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
--->
-
 # amp-story
 
 [Web stories](https://amp.dev/documentation/guides-and-tutorials/start/create_successful_stories/?format=stories) are an immersive, tappable and easily shareable storytelling format. Web stories are built using the AMP Framework. The `amp-story` component provides the AMP story subset of AMP. It is the base technology for web stories.
@@ -36,14 +20,9 @@ limitations under the License.
 
 ## Version notes
 
-| Version | Description                                                                             |
-| ------- | --------------------------------------------------------------------------------------- |
-| 1.0     | Current version, since 2018-07-16.                                                      |
-| 0.1     | Initial implementation. This is no longer valid AMP, and will be deleted on 2019-10-01. |
-
-### Migrating from 0.1 to 1.0
-
-As of 2018-07-16, version 0.1 is considered deprecated, and will be deleted on 2019-10-01. This may cause minor breaking changes, as your stories will automatically be upgraded to use version 1.0. We recommend manually migrating your pages to version 1.0 before this date to ensure functionality and proper design.
+| Version | Description                        |
+| ------- | ---------------------------------- |
+| 1.0     | Current version, since 2018-07-16. |
 
 ## AMP story format
 
@@ -171,8 +150,6 @@ The following markup is a decent starting point or boilerplate. Copy this and sa
           <h1>The End</h1>
         </amp-story-grid-layer>
       </amp-story-page>
-      <amp-story-bookend src="bookendv1.json" layout="nodisplay">
-      </amp-story-bookend>
     </amp-story>
   </body>
 </html>
@@ -218,13 +195,12 @@ The `amp-story` component represents an entire story. The component itself imple
   <amp-story-page>[...]</amp-story-page>
   <amp-story-page>[...]</amp-story-page>
   <amp-story-page>[...]</amp-story-page>
-  <amp-story-bookend src="./related.json"></amp-story-bookend>
 </amp-story>
 ```
 
 ### Metadata guidelines
 
-Metadata attributes display a preview of the story across the Web Stories ecosystem, such as rendering an engaging preview link in the bookend of a related stories. These attributes future-proof your story for rich, embedded experience Web Stories surfaces to come.
+Metadata attributes display a preview of the story across the Web Stories ecosystem, such as rendering an engaging preview link. These attributes future-proof your story for rich, embedded experience Web Stories surfaces to come.
 
 These metadata attributes supplement and do not replace any Structured Data (e.g. JSON-LD) on the page. We still recommend adding [Structured Data to your Web Stories](https://developers.google.com/search/docs/guides/enable-web-stories#implement).
 
@@ -398,6 +374,20 @@ This same image can be used for both mobile portrait and landscape desktop using
 <amp-img src="cat.jpg" alt="..." object-position="75% 40%"></amp-img>
 ```
 
+##### Optimize `amp-video` by using a free Google hosted video cache on origin documents
+
+The `<amp-video>` element on stories supports the Google video cache to be used on origin documents through the attribute `cache="google"`. The video cache will fetch and store the video contents periodically, reducing serving costs for videos, and generating transcodes with different quality settings that adapt the bitrate to the network conditions.
+
+Use 720p videos or higher to take advantage of all the video transcodes and adaptive bitrate algorithms.
+
+Example:
+
+```html
+<amp-video layout="fill" poster="img.png" cache="google" autoplay>
+  <source src="video.mp4" type="video/mp4">
+</amp-video>
+```
+
 ##### `data-text-background-color`
 
 The `data-text-background-color` attribute highlights the text of the element with a specified color. To highlight the entire block, add this attribute directly to the text element. To only highlight the text, add the attribute and text to an inner <span>. Note that works anywhere inside an `<amp-story-page>`, not just in `<amp-story-grid-layer>`.
@@ -436,20 +426,11 @@ Example:
 </amp-story-grid-layer>
 ```
 
-#### Interactive components
+#### Embedded components
 
-We support embedding components such as `<amp-twitter>` inside `amp-story-grid-layer`. By default they are not interactive in the story (i.e. tapping on them will not have any effect), but by using the `interactive` attribute, you can make them be fully interactive.
-
-When clicked, the component will be shown in a lightbox-like mode. Here, a user can choose to further interact with the embed, or close the lightbox and go back to the story.
+We support embedding some components such as `<amp-twitter>` inside `amp-story-grid-layer`. By default they are not interactive in the story (i.e. tapping on them will advance to the next page), but by using the `interactive` attribute, you can show a tooltip linking to original source (i.e. opening the tweet on a new tab).
 
 Example:
-
-<figure class="centered-fig">
-  <span class="special-char">Example:</span>
-  <amp-anim alt="Embedded component example" layout="flex-item" src="https://raw.githubusercontent.com/ampproject/amphtml/main/extensions/amp-story/img/amp-story-tooltip.gif" width="300" height="553">
-  <noscript><img width="300"  alt="Embedded component example" src="https://raw.githubusercontent.com/ampproject/amphtml/main/extensions/amp-story/img/amp-story-tooltip.gif" /></noscript>
-  </amp-anim>
-</figure>
 
 ```html
 <amp-twitter
@@ -496,38 +477,11 @@ Example:
 </a>
 ```
 
-#### Integration with sidebar for stories
-
-`amp-story` supports the use of `amp-sidebar` with a few limitations and caveats. See the [Sidebar for Stories documentation](https://amp.dev/documentation/components/amp-sidebar?format=websites#sidebar-for-stories) for more details.
-
-By using branching and `amp-sidebar`, you can create stories that have a table of contents. To do this, make use of URL fragment parameter.
-
-The following example demonstrates a table of contents inside of an `amp-sidebar`. The table of contents has a link to a specific story page, and and out-link to a different website.
-
-```html
-<amp-story id="story" standalone>
-  <amp-sidebar id="sidebar1" layout="nodisplay">
-    <ul>
-      <li><a href="#page=bacon-page"> Bacon page </a></li>
-      <li><a href="https://www.amp.dev"> External Link </a></li>
-    </ul>
-  </amp-sidebar>
-
-  <amp-story-page id="bacon-page">
-    <amp-story-grid-layer>
-      <p>Bacon, of course!</p>
-    </amp-story-grid-layer>
-  </amp-story-page>
-  ...
-</amp-story>
-```
-
 #### Other components usable in AMP stories
 
 The following are other components usable in AMP stories that require some story-specific caveats.
 
 -   [amp-consent](https://amp.dev/documentation/components/amp-consent#prompt-ui-for-stories)
--   [amp-sidebar](https://amp.dev/documentation/components/amp-sidebar#sidebar-for-stories)
 -   [amp-twitter](https://amp.dev/documentation/components/amp-twitter)
 
 For more generally usable components see the [list of allowed children](https://amp.dev/documentation/components/amp-story#children).
@@ -594,13 +548,17 @@ Disables the [Live story](#Live-story) functionality.
 
 Used with the `live-story` attribute. Time interval (in milliseconds) between checks for new content. If no `data-poll-interval` is provided it with default to the 15000 millisecond minimum. A value under 15000 milliseconds is invalid.
 
+### desktop-aspect-ratio (optional)
+
+The value specifies an aspect ratio in the "horizontal:vertical" format, where both "horizontal" and "vertical" are integer numbers. If this attribute is specified, the layout of the story in desktop one panel mode is set to conform to the specified proportions. The accepted ratio is between 1:2 and 3:4, and any values outside of the range would be clamped.
+
 ## Animations
 
 Every element inside an `<amp-story-page>` can have an entrance animation.
 
 You can configure animations by specifying a set of [animation attributes](#animation-attributes) on the element; no additional AMP extensions or configuration is needed.
 
-You can also create more advanced animations by using the `<amp-story-animation>` component. Read more on the [Advanced animations](#Advanced-animations).
+If there is something needed outside of the presets, custom animations can be configured using the [`<amp-story-animation>`](https://github.com/ampproject/amphtml/blob/main/extensions/amp-story/amp-story-animation.md) component.
 
 {% call callout('Note', type='note') %}
 Animations can help make your Web Story more visually exciting and engaging, but use them sparingly. Some users may find long, continuous animations distracting. Other users may have motion sensitivity and be adversely affected by excessive use of motion and parallax effects.
@@ -775,6 +733,27 @@ _Example_: An image panning 50px down over 15 seconds.
 </amp-img>
 ```
 
+#### pan-scaling-factor [optional, only works with `pan-left`, `pan-right`, `pan-up`, & `pan-down` animations]
+
+The target scales automatically in a pan-left/pan-right/pan-up/pan-down animation to ensure it does not go out of the target boundary when panning.
+
+Use this attribute to override the default scaling factor calculation, and specify a static scaling factor. The value must be greater than 0, and decimals are allowed.
+
+_Example_: An image scales 1.3x when panning.
+
+```html
+<amp-img
+  animate-in="pan-left"
+  pan-scaling-factor="1.3"
+  layout="fixed"
+  src="https://picsum.photos/720/320?image=1026"
+  width="720"
+  height="320"
+  alt="..."
+>
+</amp-img>
+```
+
 ### Sequencing animations
 
 To chain animations in sequence, use the `animate-in-after` attribute. All elements in a given chain must be present in the same `<amp-story-page>`. Elements without the `animate-in-after` attribute do not belong to a sequence chain, and will start independently on page entrance.
@@ -834,33 +813,6 @@ You can apply multiple entrance animations on one element (for example, an eleme
 If a composed animation is supposed to start after the end of a separate element's animation, make sure that all nested elements that compose the animation have the attribute `animate-in-after` set to the same `id`.
 {% endcall %}
 
-## Advanced animations
-
-You can create more advanced animations by using the `<amp-story-animation>` component. It lets you create [`<amp-animation>`](https://github.com/ampproject/amphtml/blob/main/extensions/amp-animation/amp-animation.md)-type animations inside your Web Story.
-
-To use it, add a `<amp-story-animation layout="nodisplay" trigger="visibility">` tag under your `<amp-story-page>` with a child `<script type="application/json">` containing the JSON configuration describing your animation. In the following example, the "rotate with amp-story-animation" text will be rotated for 1 second using `<amp-story-animation>`:
-
-```html
-...
-      <amp-story-page id="cover">
-        <amp-story-grid-layer template="vertical">
-          <strong class="animate">rotate with amp-story-animation</strong>
-        </amp-story-grid-layer>
-
-        <amp-story-animation layout="nodisplay" trigger="visibility">
-          <script type="application/json">
-            {
-              "selector": ".animate",
-              "duration": "1s",
-              "keyframes": {"transform": "rotate(360deg)"}
-            }
-          </script>
-        </amp-story-animation>
-      </amp-story-page>
-```
-
-For more details on the animation configuration and options, please refer to the [`<amp-animation> docs`](https://github.com/ampproject/amphtml/blob/main/extensions/amp-animation/amp-animation.md)
-
 ## Branching
 
 Branching enables the identification of individual story pages. Users can jump around within a story, start a story from somewhere other than the beginning, and share specific story pages. An example is a table of contents or multiple choice buttons.
@@ -877,7 +829,7 @@ With branching, AMP Stories now supports URLs in the form of:
 https://www.mydomain.com/good-story/#page=<page-id>
 ```
 
-where `page-id` refers to the unique id of an `amp-story-page`. You can also use the fragment parameter and the `page-id` value like an anchor link in some use cases. See [Integration with Sidebar for Stories](#integration-with-sidebar-for-stories) for an example.
+where `page-id` refers to the unique id of an `amp-story-page`. You can also use the fragment parameter and the `page-id` value like an anchor link in some use cases.
 
 ## Localization
 

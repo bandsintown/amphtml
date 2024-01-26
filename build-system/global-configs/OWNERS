@@ -11,5 +11,9 @@
         },
       ],
     },
+    {
+      pattern: '*-config.json',
+      owners: [{name: 'alanorozco', requestReviews: false}],
+    },
   ],
 }

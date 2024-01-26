@@ -1,28 +1,13 @@
-/**
- * Copyright 2015 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {rethrowAsync} from '#core/error';
+import {parseJson} from '#core/types/object/json';
 
-import {dict} from './../../../src/core/types/object';
-import {getData} from './../../../src/event-helper';
-import {parseJson} from './../../../src/json';
+import {getData} from '#utils/event-helper';
+
 import {
   parseUrlDeprecated,
   removeFragment,
   serializeQueryString,
 } from '../../../src/url';
-import {rethrowAsync} from './../../../src/core/error';
 
 /**
  * Returns a function, that, as long as it continues to be invoked, will not
@@ -122,38 +107,36 @@ function parsePlaybuzzEventData(data) {
     }
   } catch (e) {
     rethrowAsync('amp-playbuzz', err, e);
-    return dict({});
+    return {};
   }
 
   rethrowAsync('amp-playbuzz', err, data);
-  return dict({});
+  return {};
 }
 
 /**
- * @param {Object} options
+ * @param {object} options
  * @return {string} playbuzzEmbedUrl
  */
 export function composeEmbedUrl(options) {
   const embedUrl =
     options.itemUrl +
     '?' +
-    serializeQueryString(
-      dict({
-        'feed': true,
-        'implementation': 'amp',
-        'src': options.itemUrl,
-        'embedBy': '00000000-0000-0000-0000-000000000000',
-        'game': options.relativeUrl,
-        'comments': undefined,
-        'useComments': options.displayComments,
-        'gameInfo': options.displayItemInfo,
-        'useShares': options.displayShareBar,
-        'socialReferrer': false, //always false - will use parent url for sharing
-        'height': 'auto', //must pass as is - if not, makes problems in trivia (iframe height scrolling)
-        'parentUrl': options.parentUrl, //used for sharing
-        'parentHost': options.parentHost,
-      })
-    );
+    serializeQueryString({
+      'feed': true,
+      'implementation': 'amp',
+      'src': options.itemUrl,
+      'embedBy': '00000000-0000-0000-0000-000000000000',
+      'game': options.relativeUrl,
+      'comments': undefined,
+      'useComments': options.displayComments,
+      'gameInfo': options.displayItemInfo,
+      'useShares': options.displayShareBar,
+      'socialReferrer': false, //always false - will use parent url for sharing
+      'height': 'auto', //must pass as is - if not, makes problems in trivia (iframe height scrolling)
+      'parentUrl': options.parentUrl, //used for sharing
+      'parentHost': options.parentHost,
+    });
   return embedUrl;
 }
 

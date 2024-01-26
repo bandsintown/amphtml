@@ -1,19 +1,3 @@
-<!---
-Copyright 2016 The AMP HTML Authors. All Rights Reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS-IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
--->
-
 ### amp-ad-network-adsense-impl
 
 AdSense implementation of AMP Ad tag which requests early by XHR and
@@ -46,7 +30,27 @@ If the user has responded negatively to the amp-consent component (user rejects 
 If the user’s response to the amp-consent is unknown (user dismisses the consent prompt), by default, no ad requests are sent.  
 If `data-npa-on-unknown-consent` is set to true, non-personalized ads will be requested.
 
-See [AdSense Help Center article](https://support.google.com/dfp_premium/answer/7678538) for more information.
+The `amp-consent` response may set the following fields in the `sharedData` object for additional controls:
+
+<table>
+  <tr>
+    <td><strong>Key</strong></td>
+    <td><strong>Description</strong></td>
+    <td><strong>Possible Values</strong></td>
+  </tr>
+  <tr>
+    <td><code>"adsense-tfua"</code></td>
+    <td>Whether the slot should be treated as under-age of consent.</td>
+    <td><code>0</code> or <code>1</code></td>
+  </tr>
+  <tr>
+    <td><code>"adsense-tfcd"</code></td>
+    <td>Whether the slot should be treated as child-directed.</td>
+    <td><code>0</code> or <code>1</code></td>
+  </tr>
+</table>
+
+See [AdSense Help Center article](https://support.google.com/dfp_premium/answer/7678538) and [Restricted Data Processing article](https://support.google.com/adsense/answer/9009582?hl=en) for more information.
 
 #### Examples
 

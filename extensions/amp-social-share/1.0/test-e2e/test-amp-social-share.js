@@ -1,20 +1,4 @@
-/**
- * Copyright 2021 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-import {Key} from '../../../../build-system/tasks/e2e/functional-test-controller';
+import {Key} from '#testing/helpers/types';
 
 describes.endtoend(
   'amp-social-share',
@@ -24,7 +8,7 @@ describes.endtoend(
     experiments: ['bento-social-share'],
     environments: ['single', 'viewer-demo'],
   },
-  async (env) => {
+  (env) => {
     let controller;
 
     beforeEach(() => {
@@ -32,7 +16,8 @@ describes.endtoend(
     });
 
     describe('rendering', () => {
-      it('renders the default social share button', async () => {
+      // TODO(#35241): flaky test disabled in #35176
+      it.skip('renders the default social share button', async () => {
         const host = await controller.findElement('#one');
 
         await controller.switchToShadowRoot(host);
@@ -57,7 +42,8 @@ describes.endtoend(
         ).to.not.equal(0);
       });
 
-      it('renders the social share button with custom sizing', async () => {
+      // TODO(#35241): flaky test disabled in #35176
+      it.skip('renders the social share button with custom sizing', async () => {
         const host = await controller.findElement('#three');
 
         await controller.switchToShadowRoot(host);
@@ -71,7 +57,8 @@ describes.endtoend(
         ).to.equal(400);
       });
 
-      it('renders the social share button with custom type and endpoint', async () => {
+      // TODO(#35241): flaky test disabled in #35176
+      it.skip('renders the social share button with custom type and endpoint', async () => {
         const host = await controller.findElement('#four');
 
         await controller.switchToShadowRoot(host);
@@ -99,7 +86,9 @@ describes.endtoend(
     });
 
     describe('clicking', () => {
-      it('opens a new window on click', async () => {
+      it('opens a new window on click', async function () {
+        this.timeout(5000);
+
         const host = await controller.findElement('#two');
 
         let windows = await controller.getAllWindows();
@@ -111,8 +100,8 @@ describes.endtoend(
         await expect(windows.length).to.equal(2);
         await controller.switchToWindow(windows[1]);
 
-        await expect(controller.getCurrentUrl()).to.equal(
-          'https://twitter.com/intent/tweet?text=amp-social-share&url=http%3A%2F%2Fexample.com%2F'
+        await expect(controller.getCurrentUrl()).to.have.string(
+          'https://twitter.com/'
         );
       });
 

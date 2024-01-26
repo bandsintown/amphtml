@@ -1,64 +1,43 @@
-/**
- * Copyright 2020 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-import * as Preact from '../../../../src/preact';
 import {
-  Accordion,
-  AccordionContent,
-  AccordionHeader,
-  AccordionSection,
-} from '../../../amp-accordion/1.0/component';
-import {Youtube} from '../component';
-import {boolean, number, object, text, withKnobs} from '@storybook/addon-knobs';
-import {useRef, useState} from '../../../../src/preact';
+  BentoAccordion,
+  BentoAccordionContent,
+  BentoAccordionHeader,
+  BentoAccordionSection,
+} from '#bento/components/bento-accordion/1.0/component';
+import {BentoYoutube} from '#bento/components/bento-youtube/1.0/component';
+
+import * as Preact from '#preact';
+import {useRef, useState} from '#preact';
 
 export default {
   title: 'YouTube',
-  component: Youtube,
-  decorators: [withKnobs],
+  component: BentoYoutube,
+  args: {
+    width: 300,
+    height: 300,
+    autoplay: false,
+    loop: false,
+    params: {},
+    credentials: 'include',
+  },
 };
 
 const VIDEOID = 'IAvf-rkzNck';
 const LIVE_CHANNEL_ID = 'sKCkM-f2Qk4';
 
-export const _default = () => {
-  const width = number('width', 300);
-  const height = number('height', 200);
-  const videoid = text('videoid', VIDEOID);
-  const autoplay = boolean('autoplay', false);
-  const loop = boolean('loop', false);
-  const params = object('params', {});
-  const credentials = text('credentials', 'include');
-  return (
-    <Youtube
-      autoplay={autoplay}
-      loop={loop}
-      videoid={videoid}
-      params={params}
-      style={{width, height}}
-      credentials={credentials}
-    />
-  );
+export const _default = ({height, width, ...args}) => {
+  return <BentoYoutube style={{width, height}} {...args} />;
+};
+
+_default.args = {
+  videoid: VIDEOID,
 };
 
 /**
  * @param {*} props
  * @return {*}
  */
-function WithStateTable({videoid, autoplay, loop, params, credentials, style}) {
+function WithStateTable({autoplay, credentials, loop, params, style, videoid}) {
   const ref = useRef(null);
 
   const [stateTable, setStateTable] = useState(null);
@@ -79,7 +58,7 @@ function WithStateTable({videoid, autoplay, loop, params, credentials, style}) {
 
   return (
     <>
-      <Youtube
+      <BentoYoutube
         ref={ref}
         autoplay={autoplay}
         loop={loop}
@@ -96,83 +75,50 @@ function WithStateTable({videoid, autoplay, loop, params, credentials, style}) {
   );
 }
 
-/**
- * @return {*}
- */
-export function State() {
-  const width = number('width', 300);
-  const height = number('height', 200);
-  const videoid = text('videoid', VIDEOID);
-  const autoplay = boolean('autoplay', false);
-  const loop = boolean('loop', false);
-  const params = object('params', {});
-  const credentials = text('credentials', 'include');
-  return (
-    <WithStateTable
-      autoplay={autoplay}
-      loop={loop}
-      videoid={videoid}
-      params={params}
-      style={{width, height}}
-      credentials={credentials}
-    />
-  );
+export function State({height, width, ...args}) {
+  return <WithStateTable style={{width, height}} {...args} />;
 }
 
-export const liveChannelId = () => {
-  const width = number('width', 300);
-  const height = number('height', 200);
-  const liveChannelid = text('liveChannelid', LIVE_CHANNEL_ID);
-  const autoplay = boolean('autoplay', false);
-  const loop = boolean('loop', false);
-  const params = object('params', {});
-  const credentials = text('credentials', 'include');
+State.args = {
+  videoid: VIDEOID,
+};
+
+export const liveChannelId = ({height, width, ...args}) => {
+  return <BentoYoutube style={{width, height}} {...args} />;
+};
+
+liveChannelId.args = {
+  liveChannelid: LIVE_CHANNEL_ID,
+};
+
+export const InsideAccordion = ({height, width, ...args}) => {
   return (
-    <Youtube
-      autoplay={autoplay}
-      loop={loop}
-      liveChannelid={liveChannelid}
-      params={params}
-      style={{width, height}}
-      credentials={credentials}
-    />
+    <BentoAccordion expandSingleSection>
+      <BentoAccordionSection key={1} expanded>
+        <BentoAccordionHeader>
+          <h2>Controls</h2>
+        </BentoAccordionHeader>
+        <BentoAccordionContent>
+          <BentoYoutube loop={true} {...args} style={{width, height}} />
+        </BentoAccordionContent>
+      </BentoAccordionSection>
+      <BentoAccordionSection key={2}>
+        <BentoAccordionHeader>
+          <h2>Autoplay</h2>
+        </BentoAccordionHeader>
+        <BentoAccordionContent>
+          <BentoYoutube
+            autoplay={true}
+            loop={true}
+            {...args}
+            style={{width, height}}
+          />
+        </BentoAccordionContent>
+      </BentoAccordionSection>
+    </BentoAccordion>
   );
 };
 
-export const InsideAccordion = () => {
-  const width = text('width', '320px');
-  const height = text('height', '180px');
-  const videoid = text('videoid', VIDEOID);
-  const params = object('params', {});
-  return (
-    <Accordion expandSingleSection>
-      <AccordionSection key={1} expanded>
-        <AccordionHeader>
-          <h2>Controls</h2>
-        </AccordionHeader>
-        <AccordionContent>
-          <Youtube
-            loop={true}
-            videoid={videoid}
-            params={params}
-            style={{width, height}}
-          />
-        </AccordionContent>
-      </AccordionSection>
-      <AccordionSection key={2}>
-        <AccordionHeader>
-          <h2>Autoplay</h2>
-        </AccordionHeader>
-        <AccordionContent>
-          <Youtube
-            autoplay={true}
-            loop={true}
-            videoid={videoid}
-            params={params}
-            style={{width, height}}
-          />
-        </AccordionContent>
-      </AccordionSection>
-    </Accordion>
-  );
+InsideAccordion.args = {
+  videoid: VIDEOID,
 };

@@ -1,21 +1,7 @@
-/**
- * Copyright 2021 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 'using strict';
 
 const argv = require('minimist')(process.argv.slice(2));
+const posthtml = require('posthtml');
 const {
   log,
   logLocalDev,
@@ -26,7 +12,34 @@ const {cyan, green, red} = require('kleur/colors');
 const {getFilesToCheck} = require('../common/utils');
 const {getOutput} = require('../common/process');
 const {htmlFixtureGlobs} = require('../test-configs/config');
-const {JSDOM} = require('jsdom');
+const {pathExists, readFile} = require('fs-extra');
+
+const defaultFormat = 'AMP';
+
+// Note that the two lightning bolt emojis are encoded differently.
+// https://github.com/ampproject/amphtml/issues/25990
+const formatPrefixes = ['amp', '⚡️', '⚡'];
+const formatSuffixes = ['4ads', '4email'];
+
+/**
+ * @param {posthtml.Node} tree
+ * @return {string}
+ */
+function posthtmlGetAmpFormat(tree) {
+  let format = defaultFormat;
+  tree.match({tag: 'html'}, (node) => {
+    for (const prefix of formatPrefixes) {
+      for (const suffix of formatSuffixes) {
+        const attrValue = node.attrs[prefix + suffix];
+        if (attrValue === '' || attrValue === true) {
+          format = 'AMP' + suffix.toUpperCase();
+        }
+      }
+    }
+    return node;
+  });
+  return format;
+}
 
 /**
  * Gets the AMP format type for the given HTML file by parsing its contents and
@@ -35,11 +48,12 @@ const {JSDOM} = require('jsdom');
  * @return {Promise<string>}
  */
 async function getAmpFormat(file) {
-  const jsdom = await JSDOM.fromFile(file);
-  const {documentElement} = jsdom.window.document;
-  const isAds = documentElement.hasAttribute('amp4ads');
-  const isEmail = documentElement.hasAttribute('amp4email');
-  return isAds ? 'AMP4ADS' : isEmail ? 'AMP4EMAIL' : 'AMP';
+  const source = await readFile(file, 'utf8');
+  if (!formatSuffixes.some((suffix) => source.includes(suffix))) {
+    return defaultFormat;
+  }
+  const result = await posthtml([posthtmlGetAmpFormat]).process(source);
+  return result.html.trim();
 }
 
 /**
@@ -59,12 +73,39 @@ async function getFileGroups(filesToCheck) {
 }
 
 /**
+ * Checks for the existence of a local wasm / js validator binary and returns
+ * its location. Defaults to the wasm binary on the CDN.
+ * @return {Promise<string>}
+ */
+async function getValidatorJs() {
+  const localWasmValidatorPath =
+    'validator/bazel-bin/cpp/engine/wasm/validator_js_bin.js';
+  const localJsValidatorPath = 'validator/dist/validator_minified.js';
+  if (await pathExists(localWasmValidatorPath)) {
+    log('Using the', cyan('locally built wasm validator') + '...');
+    return localWasmValidatorPath;
+  }
+  if (await pathExists(localJsValidatorPath)) {
+    log('Using the', cyan('locally built js validator') + '...');
+    return localJsValidatorPath;
+  }
+  log('Using the', cyan('wasm validator from the CDN') + '...');
+  logLocalDev(
+    '⤷ To use a locally built wasm or js validator,',
+    'run the build command from',
+    cyan('validator/README.md') + '.'
+  );
+  return 'https://cdn.ampproject.org/v0/validator_wasm.js'; // eslint-disable-line local/no-forbidden-terms
+}
+
+/**
  * Runs amphtml-validator on the given list of files and prints results.
  *
  * @param {Array<string>} filesToCheck
  * @return {Promise<void>}
  */
 async function runCheck(filesToCheck) {
+  const validatorJs = await getValidatorJs();
   const fileGroups = await getFileGroups(filesToCheck);
   const formats = Object.keys(fileGroups);
   let foundValidationErrors = false;
@@ -74,7 +115,10 @@ async function runCheck(filesToCheck) {
     }
     const files = fileGroups[format].sort().join(' ');
     logLocalDev(green('Validating'), cyan(format), green('fixtures...'));
-    const validateFixturesCmd = `FORCE_COLOR=1 npx amphtml-validator --html_format ${format} ${files}`;
+    const validatorCmd = 'FORCE_COLOR=1 npx amphtml-validator';
+    const validatorJsArg = `--validator_js ${validatorJs}`;
+    const htmlFormatArg = `--html_format ${format}`;
+    const validateFixturesCmd = `${validatorCmd} ${validatorJsArg} ${htmlFormatArg} ${files}`;
     const result = getOutput(validateFixturesCmd);
     logWithoutTimestampLocalDev(result.stdout);
     if (result.stderr) {
@@ -84,13 +128,15 @@ async function runCheck(filesToCheck) {
     }
   }
   if (foundValidationErrors) {
-    throw new Error('Please address the errors listed above.');
+    log('Please address the errors listed above.');
+    throw new Error('Validation failed.');
   }
   log(green('SUCCESS:'), 'All HTML fixtures are valid.');
 }
 
 /**
  * Makes sure that HTML fixtures used during tests contain valid AMPHTML.
+ * @return {Promise<void>}
  */
 async function validateHtmlFixtures() {
   const globs = argv.include_skipped
@@ -103,15 +149,16 @@ async function validateHtmlFixtures() {
   await runCheck(filesToCheck);
 }
 
-validateHtmlFixtures.description =
-  'Makes sure that HTML fixtures used during tests contain valid AMPHTML.';
-validateHtmlFixtures.flags = {
-  'files': 'Checks just the specified files',
-  'include_skipped':
-    'Include skipped files while validating (can be used with --local_changes)',
-  'local_changes': 'Checks just the files changed in the local branch',
-};
-
 module.exports = {
   validateHtmlFixtures,
+};
+
+validateHtmlFixtures.description =
+  'Make sure that HTML fixtures used during tests contain valid AMPHTML';
+
+validateHtmlFixtures.flags = {
+  'files': 'Check just the specified files',
+  'include_skipped':
+    'Include skipped files while validating (can be used with --local_changes)',
+  'local_changes': 'Check just the files changed in the local branch',
 };

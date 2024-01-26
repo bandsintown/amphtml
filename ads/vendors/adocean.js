@@ -1,25 +1,13 @@
-/**
- * Copyright 2015 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {computeInMasterFrame, validateData, writeScript} from '#3p/3p';
 
-import {CONSENT_POLICY_STATE} from '../../src/core/constants/consent-state';
-import {computeInMasterFrame, validateData, writeScript} from '../../3p/3p';
-import {parseJson} from '../../src/json';
+import {
+  CONSENT_POLICY_STATE,
+  CONSENT_STRING_TYPE,
+} from '#core/constants/consent-state';
+import {parseJson} from '#core/types/object/json';
 
 /**
- * @const {Object<string, string>}
+ * @const {{[key: string]: string}}
  */
 const ADO_JS_PATHS = {
   'sync': '/files/js/ado.js',
@@ -37,7 +25,7 @@ function isFalseString(str) {
 /**
  * @param {string} mode
  * @param {!Window} global
- * @param {boolean} consent
+ * @param {object} consent
  */
 function setupAdoConfig(mode, global, consent) {
   if (global['ado']) {
@@ -47,7 +35,9 @@ function setupAdoConfig(mode, global, consent) {
       fif: {
         enabled: mode != 'sync',
       },
-      consent,
+      consent: consent.accepted,
+      gdprApplies: consent.gdprApplies,
+      gdprConsent: consent.consentString,
     };
 
     global['ado']['config'](config);
@@ -218,7 +208,7 @@ function requestCodes(masterId, data, global, callback) {
 class AdoBuffer {
   /**
    *
-   * @param {Object} container
+   * @param {object} container
    * @param {!Window} global
    */
   constructor(container, global) {
@@ -321,14 +311,24 @@ export function adocean(global, data) {
   const adoUrl = 'https://' + data['aoEmitter'] + ADO_JS_PATHS[mode];
   const ctx = global.context;
 
-  /*
-   * INSUFFICIENT and UNKNOWN should be treated as INSUFFICIENT
-   * not defined states should be treated as INSUFFICIENT
-   */
-  const consent =
-    ctx.initialConsentState === null /* tags without data-block-on-consent */ ||
-    ctx.initialConsentState === CONSENT_POLICY_STATE.SUFFICIENT ||
-    ctx.initialConsentState === CONSENT_POLICY_STATE.UNKNOWN_NOT_REQUIRED;
+  const consent = {
+    accepted:
+      /* INSUFFICIENT and UNKNOWN should be treated as INSUFFICIENT
+       * not defined states should be treated as INSUFFICIENT */
+      ctx.initialConsentState ===
+        null /* tags without data-block-on-consent */ ||
+      ctx.initialConsentState === CONSENT_POLICY_STATE.SUFFICIENT ||
+      ctx.initialConsentState === CONSENT_POLICY_STATE.UNKNOWN_NOT_REQUIRED,
+    gdprApplies:
+      typeof ctx.initialConsentMetadata?.gdprApplies === 'boolean'
+        ? ctx.initialConsentMetadata.gdprApplies
+        : undefined,
+    consentString:
+      ctx.initialConsentMetadata?.consentStringType ===
+      CONSENT_STRING_TYPE.TCF_V2
+        ? ctx.initialConsentValue
+        : undefined,
+  };
 
   writeScript(global, adoUrl, () => {
     setupAdoConfig(mode, global, consent);

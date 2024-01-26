@@ -1,22 +1,6 @@
-/**
- * Copyright 2019 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 const colors = require('kleur/colors');
+const fastGlob = require('fast-glob');
 const fs = require('fs-extra');
-const globby = require('globby');
 const path = require('path');
 const {
   bootstrapThirdPartyFrames,
@@ -29,16 +13,16 @@ const {
   printNobuildHelp,
 } = require('./helpers');
 const {
-  cleanupBuildDir,
-  printClosureConcurrency,
-} = require('../compile/compile');
-const {
   createCtrlcHandler,
   exitCtrlcHandler,
 } = require('../common/ctrlcHandler');
 const {
   displayLifecycleDebugging,
 } = require('../compile/debug-compilation-lifecycle');
+const {
+  VERSION: internalRuntimeVersion,
+} = require('../compile/internal-version');
+const {buildCompiler} = require('../compile/build-compiler');
 const {buildExtensions, parseExtensionFlags} = require('./extension-helpers');
 const {buildVendorConfigs} = require('./3p-vendor-helpers');
 const {compileCss, copyCss} = require('./css');
@@ -46,8 +30,9 @@ const {compileJison} = require('./compile-jison');
 const {formatExtractedMessages} = require('../compile/log-messages');
 const {log} = require('../common/logging');
 const {VERSION} = require('../compile/internal-version');
+const {buildStoryLocalization} = require('./build-story-localization');
 
-const {green, cyan} = colors;
+const {cyan, green} = colors;
 const argv = require('minimist')(process.argv.slice(2));
 
 /**
@@ -98,39 +83,31 @@ function printDistHelp(options) {
  * Used by `amp` and `amp dist`.
  *
  * @param {!Object} options
+ * @return {Promise<void>}
  */
 async function runPreDistSteps(options) {
-  cleanupBuildDir();
   await prebuild();
   await compileCss(options);
   await copyCss();
   await compileJison();
   await copyParsers();
   await bootstrapThirdPartyFrames(options);
+  await buildStoryLocalization(options);
   displayLifecycleDebugging();
 }
 
 /**
  * Minified build. Entry point for `amp dist`.
+ * @return {Promise<void>}
  */
 async function dist() {
-  await doDist();
-}
-
-/**
- * Performs a minified build with the given extra args.
- *
- * @param {Object=} extraArgs
- */
-async function doDist(extraArgs = {}) {
   const handlerProcess = createCtrlcHandler('dist');
   process.env.NODE_ENV = 'production';
   const options = {
-    fortesting: extraArgs.fortesting || argv.fortesting,
+    fortesting: argv.fortesting,
     minify: true,
     watch: argv.watch,
   };
-  printClosureConcurrency();
   printNobuildHelp();
   printDistHelp(options);
   await runPreDistSteps(options);
@@ -139,10 +116,14 @@ async function doDist(extraArgs = {}) {
   if (argv.core_runtime_only) {
     await compileCoreRuntime(options);
   } else {
-    await buildExperiments();
-    await buildLoginDone('0.1');
-    await buildWebPushPublisherFiles();
-    await compileAllJs(options);
+    await Promise.all([
+      writeVersionFiles(),
+      buildExperiments(),
+      buildLoginDone('0.1'),
+      buildWebPushPublisherFiles(),
+      buildCompiler(),
+      compileAllJs(options),
+    ]);
   }
 
   // This step internally parses the various extension* flags.
@@ -167,7 +148,28 @@ async function doDist(extraArgs = {}) {
 }
 
 /**
+ * Writes the verion.txt file.
+ * @return {!Promise}
+ */
+async function writeVersionFiles() {
+  // TODO: determine which of these are necessary and trim the rest via an I2D.
+  const paths = [
+    'dist',
+    'dist/v0',
+    'dist/v0/examples',
+    'dist.tools/experiments',
+    `dist.3p/${internalRuntimeVersion}`,
+    `dist.3p/${internalRuntimeVersion}/vendor`,
+  ].map((p) => path.join(...p.split('/'), 'version.txt'));
+
+  return Promise.all(
+    paths.map((p) => fs.outputFile(p, internalRuntimeVersion))
+  );
+}
+
+/**
  * Build AMP experiments.js.
+ * @return {Promise<void>}
  */
 async function buildExperiments() {
   await compileJs(
@@ -193,22 +195,19 @@ function buildLoginDone(version) {
   const buildDir = `build/all/amp-access-${version}`;
   const builtName = `amp-login-done-${version}.max.js`;
   const minifiedName = `amp-login-done-${version}.js`;
-  const latestName = 'amp-login-done-latest.js';
+  const aliasName = 'amp-login-done-latest.js';
   return compileJs(`./${buildDir}`, builtName, './dist/v0/', {
     watch: argv.watch,
     includePolyfills: true,
     minify: true,
     minifiedName,
-    latestName,
-    extraGlobs: [
-      `${buildDir}/amp-login-done-0.1.max.js`,
-      `${buildDir}/amp-login-done-dialog.js`,
-    ],
+    aliasName,
   });
 }
 
 /**
  * Build amp-web-push publisher files HTML page.
+ * @return {Promise<void>}
  */
 async function buildWebPushPublisherFiles() {
   const distDir = 'dist/v0';
@@ -222,7 +221,6 @@ async function buildWebPushPublisherFiles() {
         includePolyfills: true,
         minify: true,
         minifiedName,
-        extraGlobs: [`${tempBuildDir}/*.js`],
       });
     }
   }
@@ -240,6 +238,7 @@ async function prebuild() {
 
 /**
  * Copies parsers from the build folder to the dist folder
+ * @return {Promise<void>}
  */
 async function copyParsers() {
   const startTime = Date.now();
@@ -249,6 +248,7 @@ async function copyParsers() {
 
 /**
  * Build amp-web-push publisher files HTML page.
+ * @return {Promise<void>}
  */
 async function preBuildWebPushPublisherFiles() {
   for (const version of WEB_PUSH_PUBLISHER_VERSIONS) {
@@ -260,7 +260,7 @@ async function preBuildWebPushPublisherFiles() {
       const js = await fs.readFile(`${srcPath}/${fileName}.js`, 'utf8');
       const builtName = `${fileName}.js`;
       await fs.outputFile(`${destPath}/${builtName}`, js);
-      const jsFiles = globby.sync(`${srcPath}/*.js`);
+      const jsFiles = await fastGlob(`${srcPath}/*.js`);
       await Promise.all(
         jsFiles.map((jsFile) => {
           return fs.copy(jsFile, `${destPath}/${path.basename(jsFile)}`);
@@ -272,6 +272,7 @@ async function preBuildWebPushPublisherFiles() {
 
 /**
  * post Build amp-web-push publisher files HTML page.
+ * @return {Promise<void>}
  */
 async function postBuildWebPushPublisherFilesVersion() {
   const distDir = 'dist/v0';
@@ -298,6 +299,7 @@ async function postBuildWebPushPublisherFilesVersion() {
 
 /**
  * Precompilation steps required to build experiment js binaries.
+ * @return {Promise<void>}
  */
 async function preBuildExperiments() {
   const expDir = 'tools/experiments';
@@ -321,7 +323,7 @@ async function preBuildExperiments() {
   const js = await fs.readFile(jsSrcPath, 'utf8');
   const builtName = 'experiments.max.js';
   await fs.outputFile(`${jsDir}/${builtName}`, js);
-  const jsFiles = globby.sync(`${expDir}/*.js`);
+  const jsFiles = await fastGlob(`${expDir}/*.js`);
   await Promise.all(
     jsFiles.map((jsFile) => {
       return fs.copy(jsFile, `${jsDir}/${path.basename(jsFile)}`);
@@ -331,6 +333,7 @@ async function preBuildExperiments() {
 
 /**
  * Build "Login Done" page.
+ * @return {Promise<void>}
  */
 async function preBuildLoginDone() {
   await preBuildLoginDoneVersion('0.1');
@@ -339,6 +342,7 @@ async function preBuildLoginDone() {
 /**
  * Build "Login Done" page for the specified version.
  * @param {string} version
+ * @return {Promise<void>}
  */
 async function preBuildLoginDoneVersion(version) {
   const srcDir = `extensions/amp-access/${version}`;
@@ -361,7 +365,7 @@ async function preBuildLoginDoneVersion(version) {
   const js = await fs.readFile(jsPath, 'utf8');
   const builtName = `amp-login-done-${version}.max.js`;
   await fs.outputFile(`${buildDir}/${builtName}`, js);
-  const jsFiles = globby.sync(`${srcDir}/*.js`);
+  const jsFiles = await fastGlob(`${srcDir}/*.js`);
   await Promise.all(
     jsFiles.map((jsFile) => {
       return fs.copy(jsFile, `${buildDir}/${path.basename(jsFile)}`);
@@ -371,42 +375,38 @@ async function preBuildLoginDoneVersion(version) {
 
 module.exports = {
   dist,
-  doDist,
   runPreDistSteps,
 };
 
-/* eslint "google-camelcase/google-camelcase": 0 */
+/* eslint "local/camelcase": 0 */
 
 dist.description =
-  'Compiles AMP production binaries and applies AMP_CONFIG to runtime files';
+  'Compile AMP production binaries and apply AMP_CONFIG to runtime files';
 dist.flags = {
   pseudo_names:
-    'Compiles with readable names. ' +
-    'Great for profiling and debugging production code.',
+    'Compile with readable names (useful while profiling / debugging production code)',
   pretty_print:
-    'Outputs compiled code with whitespace. ' +
-    'Great for debugging production code.',
-  fortesting: 'Compiles production binaries for local testing',
-  noconfig: 'Compiles production binaries without applying AMP_CONFIG',
-  config: 'Sets the runtime\'s AMP_CONFIG to one of "prod" or "canary"',
-  coverage: 'Instruments compiled code for collecting coverage information',
-  extensions: 'Builds only the listed extensions.',
-  extensions_from: 'Builds only the extensions from the listed AMP(s).',
-  noextensions: 'Builds with no extensions.',
-  core_runtime_only: 'Builds only the core runtime.',
-  full_sourcemaps: 'Includes source code content in sourcemaps',
-  sourcemap_url: 'Sets a custom sourcemap URL with placeholder {version}',
-  type: 'Points sourcemap to fetch files from the correct GitHub tag',
-  esm: 'Does not transpile down to ES5',
+    'Output code with whitespace (useful while profiling / debugging production code)',
+  fortesting: 'Compile production binaries for local testing',
+  noconfig: 'Compile production binaries without applying AMP_CONFIG',
+  nomanglecache:
+    'Do not share the mangle cache between binaries, useful only in estimating size impacts of code changes.',
+  config: 'Set the runtime\'s AMP_CONFIG to one of "prod" or "canary"',
+  coverage: 'Instrument code for collecting coverage information',
+  extensions: 'Build only the listed extensions',
+  extensions_from: 'Build only the extensions from the listed AMP(s)',
+  noextensions: 'Build with no extensions',
+  core_runtime_only: 'Build only the core runtime',
+  full_sourcemaps: 'Include source code content in sourcemaps',
+  sourcemap_url: 'Set a custom sourcemap URL with placeholder {version}',
+  type: 'Point sourcemap to fetch files from the correct GitHub tag',
+  esm: 'Do not transpile down to ES5',
   version_override: 'Override the version written to AMP_CONFIG',
-  watch: 'Watches for changes in files, re-compiles when detected',
-  closure_concurrency: 'Sets the number of concurrent invocations of closure',
-  debug: 'Outputs the file contents during compilation lifecycles',
+  watch: 'Watch for changes in files, re-compiles when detected',
+  debug: 'Output the file contents during compilation lifecycles',
   define_experiment_constant:
-    'Builds runtime with the EXPERIMENT constant set to true',
+    'Build runtime with the EXPERIMENT constant set to true',
   sanitize_vars_for_diff:
-    'Sanitize the output to diff build results. Requires --pseudo_names',
-  sxg: 'Outputs the compiled code for the SxG build',
-  warning_level:
-    "Optionally sets closure's warning level to one of [quiet, default, verbose]",
+    'Sanitize the output to diff build results (requires --pseudo_names)',
+  sxg: 'Output the minified code for the SxG build',
 };

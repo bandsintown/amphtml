@@ -1,24 +1,10 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {ActionTrust_Enum} from '#core/constants/action-constants';
+import {removeChildren} from '#core/dom';
+import {isLayoutSizeDefined} from '#core/dom/layout';
 
-import {ActionTrust} from '../../../src/core/constants/action-constants';
-import {Services} from '../../../src/services';
-import {isLayoutSizeDefined} from '../../../src/layout';
-import {removeChildren} from '../../../src/dom';
-import {user, userAssert} from '../../../src/log';
+import {Services} from '#service';
+
+import {user, userAssert} from '#utils/log';
 
 /** @const {string} */
 const TAG = 'amp-date-countdown';
@@ -47,7 +33,7 @@ const MILLISECONDS_IN_MINUTE = 60 * 1000;
 /** @const {number} */
 const MILLISECONDS_IN_SECOND = 1000;
 
-/** @const {Object} */
+/** @const {object} */
 //https://ctrlq.org/code/19899-google-translate-languages refer to google code
 const LOCALE_WORD = {
   'de': ['Jahren', 'Monaten', 'Tagen', 'Stunden', 'Minuten', 'Sekunden'],
@@ -103,7 +89,7 @@ export class AmpDateCountdown extends AMP.BaseElement {
     /** @private {string} */
     this.biggestUnit_ = '';
 
-    /** @private {!Object|null} */
+    /** @private {?Object} */
     this.localeWordList_ = null;
 
     /** @private {?number} */
@@ -156,7 +142,7 @@ export class AmpDateCountdown extends AMP.BaseElement {
       this.element.getAttribute('biggest-unit') || DEFAULT_BIGGEST_UNIT
     ).toUpperCase();
 
-    /** @private {!Object|null} */
+    /** @private {?Object} */
     this.localeWordList_ = this.getLocaleWord_(this.locale_);
 
     /** @private {boolean} */
@@ -209,7 +195,7 @@ export class AmpDateCountdown extends AMP.BaseElement {
         this.element,
         'timeout',
         null,
-        ActionTrust.LOW
+        ActionTrust_Enum.LOW
       );
       this.win.clearInterval(this.countDownTimer_);
     }
@@ -269,7 +255,7 @@ export class AmpDateCountdown extends AMP.BaseElement {
   /**
    * @param {number} ms
    * @param {boolean} countUp
-   * @return {Object}
+   * @return {object}
    * @private
    */
   getYDHMSFromMs_(ms, countUp) {
@@ -297,18 +283,18 @@ export class AmpDateCountdown extends AMP.BaseElement {
       TimeUnit[this.biggestUnit_] == TimeUnit.HOURS
         ? this.supportBackDate_(Math.floor(ms / MILLISECONDS_IN_HOUR))
         : TimeUnit[this.biggestUnit_] < TimeUnit.HOURS
-        ? this.supportBackDate_(
-            Math.floor((ms % MILLISECONDS_IN_DAY) / MILLISECONDS_IN_HOUR)
-          )
-        : 0;
+          ? this.supportBackDate_(
+              Math.floor((ms % MILLISECONDS_IN_DAY) / MILLISECONDS_IN_HOUR)
+            )
+          : 0;
     const m =
       TimeUnit[this.biggestUnit_] == TimeUnit.MINUTES
         ? this.supportBackDate_(Math.floor(ms / MILLISECONDS_IN_MINUTE))
         : TimeUnit[this.biggestUnit_] < TimeUnit.MINUTES
-        ? this.supportBackDate_(
-            Math.floor((ms % MILLISECONDS_IN_HOUR) / MILLISECONDS_IN_MINUTE)
-          )
-        : 0;
+          ? this.supportBackDate_(
+              Math.floor((ms % MILLISECONDS_IN_HOUR) / MILLISECONDS_IN_MINUTE)
+            )
+          : 0;
     const s =
       TimeUnit[this.biggestUnit_] == TimeUnit.SECONDS
         ? this.supportBackDate_(Math.floor(ms / MILLISECONDS_IN_SECOND))

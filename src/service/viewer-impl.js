@@ -1,48 +1,37 @@
-/**
- * Copyright 2015 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {VisibilityState_Enum} from '#core/constants/visibility-state';
+import {Observable} from '#core/data-structures/observable';
+import {Deferred, tryResolve} from '#core/data-structures/promise';
+import {isIframed} from '#core/dom';
+import {duplicateErrorIfNecessary} from '#core/error';
+import {stripUserError} from '#core/error/message-helpers';
+import {isEnumValue} from '#core/types';
+import {findIndex} from '#core/types/array';
+import {map} from '#core/types/object';
+import {endsWith} from '#core/types/string';
+import {parseQueryString} from '#core/types/string/url';
 
-import {Deferred, tryResolve} from '../core/data-structures/promise';
-import {Observable} from '../core/data-structures/observable';
-import {Services} from '../services';
-import {VisibilityState} from '../core/constants/visibility-state';
-import {dev, devAssert, stripUserError} from '../log';
-import {duplicateErrorIfNecessary} from '../core/error';
-import {endsWith} from '../core/types/string';
-import {findIndex} from '../core/types/array';
+import {Services} from '#service';
+
+import {listen} from '#utils/event-helper';
+import {dev, devAssert} from '#utils/log';
+
+import {ViewerInterface} from './viewer-interface';
+
+import * as urls from '../config/urls';
+import {reportError} from '../error-reporting';
+import {registerServiceBuilderForDoc} from '../service-helpers';
 import {
   getSourceOrigin,
   isProxyOrigin,
-  parseQueryString,
   parseUrlDeprecated,
   removeFragment,
   serializeQueryString,
 } from '../url';
-import {isIframed} from '../dom';
-import {listen} from '../event-helper';
-import {map} from '../core/types/object';
-import {registerServiceBuilderForDoc} from '../service';
-import {reportError} from '../error-reporting';
-import {urls} from '../config';
-
-import {ViewerInterface} from './viewer-interface';
 
 const TAG_ = 'Viewer';
 
 /** @enum {string} */
-export const Capability = {
+export const Capability_Enum = {
   VIEWER_RENDER_TEMPLATE: 'viewerRenderTemplate',
 };
 
@@ -65,7 +54,8 @@ const VIEWER_ORIGIN_TIMEOUT_ = 1000;
  * @const
  * @private {!RegExp}
  */
-const TRIM_ORIGIN_PATTERN_ = /^(https?:\/\/)((www[0-9]*|web|ftp|wap|home|mobile|amp|m)\.)+/i;
+const TRIM_ORIGIN_PATTERN_ =
+  /^(https?:\/\/)((www[0-9]*|web|ftp|wap|home|mobile|amp|m)\.)+/i;
 
 /**
  * An AMP representation of the Viewer. This class doesn't do any work itself
@@ -95,10 +85,10 @@ export class ViewerImpl {
     /** @private {boolean} */
     this.overtakeHistory_ = false;
 
-    /** @private {!Object<string, !Observable<!JsonObject>>} */
+    /** @private {!{[key: string]: !Observable<!JsonObject>}} */
     this.messageObservables_ = map();
 
-    /** @private {!Object<string, !./viewer-interface.RequestResponderDef>} */
+    /** @private {!{[key: string]: !./viewer-interface.RequestResponderDef}} */
     this.messageResponders_ = map();
 
     /** @private {!Observable<boolean>} */
@@ -138,7 +128,7 @@ export class ViewerImpl {
     /**
      * Subset of this.params_ that only contains parameters in the URL hash,
      * e.g. "#foo=bar".
-     * @const @private {!Object<string, string>}
+     * @const @private {!{[key: string]: string}}
      */
     this.hashParams_ = map();
 
@@ -528,17 +518,18 @@ export class ViewerImpl {
     if (!state) {
       return;
     }
-    state = dev().assertEnumValue(VisibilityState, state, 'VisibilityState');
+
+    devAssert(isEnumValue(VisibilityState_Enum, state));
 
     // The viewer is informing us we are not currently active because we are
     // being pre-rendered, or the user swiped to another doc (or closed the
     // viewer). Unfortunately, the viewer sends HIDDEN instead of PRERENDER or
     // INACTIVE, though we know better.
-    if (state === VisibilityState.HIDDEN) {
+    if (state === VisibilityState_Enum.HIDDEN) {
       state =
         this.ampdoc.getLastVisibleTime() != null
-          ? VisibilityState.INACTIVE
-          : VisibilityState.PRERENDER;
+          ? VisibilityState_Enum.INACTIVE
+          : VisibilityState_Enum.PRERENDER;
     }
 
     this.ampdoc.overrideVisibilityState(state);
@@ -769,6 +760,11 @@ export class ViewerImpl {
   }
 
   /** @override */
+  maybeGetMessageDeliverer() {
+    return this.messageDeliverer_;
+  }
+
+  /** @override */
   sendMessage(eventType, data, cancelUnsent = false) {
     this.sendMessageInternal_(eventType, data, cancelUnsent, false);
   }
@@ -792,14 +788,15 @@ export class ViewerImpl {
       // Certain message deliverers return fake "Promise" instances called
       // "Thenables". Convert from these values into trusted Promise instances,
       // assimilating with the resolved (or rejected) internal value.
-      return /** @type {!Promise<?JsonObject|string|undefined>} */ (tryResolve(
-        () =>
+      return /** @type {!Promise<?JsonObject|string|undefined>} */ (
+        tryResolve(() =>
           this.messageDeliverer_(
             eventType,
             /** @type {?JsonObject|string|undefined} */ (data),
             awaitResponse
           )
-      ));
+        )
+      );
     }
 
     if (!this.messagingReadyPromise_) {
@@ -900,13 +897,13 @@ export class ViewerImpl {
    * made visible by the viewer.
    */
   visibleOnUserAction_() {
-    if (this.ampdoc.getVisibilityState() == VisibilityState.VISIBLE) {
+    if (this.ampdoc.getVisibilityState() == VisibilityState_Enum.VISIBLE) {
       return;
     }
     const unlisten = [];
     const doUnlisten = () => unlisten.forEach((fn) => fn());
     const makeVisible = () => {
-      this.setVisibilityState_(VisibilityState.VISIBLE);
+      this.setVisibilityState_(VisibilityState_Enum.VISIBLE);
       doUnlisten();
       dev().expectedError(TAG_, 'Received user action in non-visible doc');
     };

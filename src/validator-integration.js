@@ -1,23 +1,10 @@
-/**
- * Copyright 2015 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {propagateNonce} from '#core/dom';
+import {getHashParams} from '#core/types/string/url';
 
-import {getMode} from './mode';
-import {loadPromise} from './event-helper';
-import {parseQueryString} from './url';
-import {urls} from './config';
+import {loadPromise} from '#utils/event-helper';
+
+import * as urls from './config/urls';
+import {isModeDevelopment} from './mode';
 
 /**
  * Triggers validation for the current document if there is a script in the
@@ -32,25 +19,17 @@ export function maybeValidate(win) {
     // Should only happen in tests.
     return;
   }
-  let validatorUrl = null;
-  if (getMode().development) {
-    const hash = parseQueryString(
-      win.location['originalHash'] || win.location.hash
-    );
-    if (hash['validate'] === 'wasm') {
-      validatorUrl = `${urls.cdn}/v0/validator_wasm.js`;
-    } else if (hash['validate'] !== '0') {
-      validatorUrl = `${urls.cdn}/v0/validator.js`;
-    }
+  let validator = false;
+  const params = getHashParams(win);
+  if (isModeDevelopment(win, params)) {
+    validator = params['validate'] !== '0';
   }
 
-  if (validatorUrl) {
-    loadScript(win.document, validatorUrl).then(() => {
+  if (validator) {
+    loadScript(win.document, `${urls.cdn}/v0/validator_wasm.js`).then(() => {
       /* global amp: false */
       amp.validator.validateUrlAndLog(filename, win.document);
     });
-  } else if (getMode().examiner) {
-    loadScript(win.document, `${urls.cdn}/examiner.js`);
   }
 }
 
@@ -62,16 +41,33 @@ export function maybeValidate(win) {
  * @return {!Promise}
  */
 export function loadScript(doc, url) {
-  const script = /** @type {!HTMLScriptElement} */ (doc.createElement(
-    'script'
-  ));
-  script.src = url;
-
-  // Propagate nonce to all generated script tags.
-  const currentScript = doc.head.querySelector('script[nonce]');
-  if (currentScript) {
-    script.setAttribute('nonce', currentScript.getAttribute('nonce'));
+  const script = /** @type {!HTMLScriptElement} */ (
+    doc.createElement('script')
+  );
+  // Make script.src assignment Trusted Types compatible for compatible browsers
+  if (self.trustedTypes && self.trustedTypes.createPolicy) {
+    const policy = self.trustedTypes.createPolicy(
+      'validator-integration#loadScript',
+      {
+        createScriptURL: function (url) {
+          // Only allow trusted URLs
+          // Using explicit cdn domain as no other AMP Cache hosts validator_
+          // wasm so we can assume the explicit cdn domain is cdn.ampproject.org
+          // instead of using the dynamic cdn value from src/config/urls.js
+          // eslint-disable-next-line local/no-forbidden-terms
+          if (url === 'https://cdn.ampproject.org/v0/validator_wasm.js') {
+            return url;
+          } else {
+            return '';
+          }
+        },
+      }
+    );
+    script.src = policy.createScriptURL(url);
+  } else {
+    script.src = url;
   }
+  propagateNonce(doc, script);
 
   const promise = loadPromise(script).then(
     () => {

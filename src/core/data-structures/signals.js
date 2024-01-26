@@ -1,21 +1,8 @@
-/**
- * Copyright 2017 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {map} from '#core/types/object';
 
 import {Deferred} from './promise';
-import {map} from '../types/object';
+
+/** @typedef {import('#core/types/date').TimestampDef} TimestampDef */
 
 /**
  * This object tracts signals and allows blocking until a signal has been
@@ -29,7 +16,7 @@ export class Signals {
     /**
      * A mapping from a signal name to the signal response: either time or
      * an error.
-     * @private @const {!Object<string, (Timestamp|!Error)>}
+     * @private @const {{[key: string]: (TimestampDef|Error)}}
      */
     this.map_ = map();
 
@@ -38,7 +25,7 @@ export class Signals {
      * Only allocated when promise has been requested.
      * @private {?Object<string, {
      *   promise: !Promise,
-     *   resolve: (function(Timestamp)|undefined),
+     *   resolve: (function(!TimestampDef)|undefined),
      *   reject: (function(!Error)|undefined)
      * }>}
      */
@@ -49,7 +36,7 @@ export class Signals {
    * Returns the current known value of the signal. If signal is not yet
    * available, `null` is returned.
    * @param {string} name
-   * @return {number|!Error|null}
+   * @return {number|Error|null}
    */
   get(name) {
     const v = this.map_[name];
@@ -60,10 +47,10 @@ export class Signals {
    * Returns the promise that's resolved when the signal is triggered. The
    * resolved value is the time of the signal.
    * @param {string} name
-   * @return {!Promise<Timestamp>}
+   * @return {Promise<TimestampDef>}
    */
   whenSignal(name) {
-    let promiseStruct = this.promiseMap_ && this.promiseMap_[name];
+    let promiseStruct = this.promiseMap_?.[name];
     if (!promiseStruct) {
       const result = this.map_[name];
       if (result != null) {
@@ -76,10 +63,7 @@ export class Signals {
       } else {
         // Allocate the promise/resolver for when the signal arrives in the
         // future.
-        const deferred = new Deferred();
-        const {promise, resolve, reject} = deferred;
-
-        promiseStruct = {promise, resolve, reject};
+        promiseStruct = new Deferred();
       }
       if (!this.promiseMap_) {
         this.promiseMap_ = map();
@@ -92,19 +76,19 @@ export class Signals {
   /**
    * Triggers the signal with the specified name on the element. The time is
    * optional; if not provided, the current time is used. The associated
-   * promise is resolved with the resulting Timestamp.
+   * promise is resolved with the resulting TimestampDef.
    * @param {string} name
-   * @param {Timestamp=} opt_time
+   * @param {TimestampDef=} opt_time
    */
   signal(name, opt_time) {
     if (this.map_[name] != null) {
       // Do not duplicate signals.
       return;
     }
-    const time = opt_time == undefined ? Date.now() : opt_time;
+    const time = opt_time ?? Date.now();
     this.map_[name] = time;
-    const promiseStruct = this.promiseMap_ && this.promiseMap_[name];
-    if (promiseStruct && promiseStruct.resolve) {
+    const promiseStruct = this.promiseMap_?.[name];
+    if (promiseStruct?.resolve) {
       promiseStruct.resolve(time);
       promiseStruct.resolve = undefined;
       promiseStruct.reject = undefined;
@@ -115,7 +99,7 @@ export class Signals {
    * Rejects the signal. Indicates that the signal will never succeed. The
    * associated signal is rejected.
    * @param {string} name
-   * @param {!Error} error
+   * @param {Error} error
    */
   rejectSignal(name, error) {
     if (this.map_[name] != null) {
@@ -123,8 +107,8 @@ export class Signals {
       return;
     }
     this.map_[name] = error;
-    const promiseStruct = this.promiseMap_ && this.promiseMap_[name];
-    if (promiseStruct && promiseStruct.reject) {
+    const promiseStruct = this.promiseMap_?.[name];
+    if (promiseStruct?.reject) {
       promiseStruct.reject(error);
       promiseStruct.promise.catch(() => {});
       promiseStruct.resolve = undefined;
@@ -141,7 +125,7 @@ export class Signals {
       delete this.map_[name];
     }
     // Reset promise it has already been resolved.
-    const promiseStruct = this.promiseMap_ && this.promiseMap_[name];
+    const promiseStruct = this.promiseMap_?.[name];
     if (promiseStruct && !promiseStruct.resolve) {
       delete this.promiseMap_[name];
     }

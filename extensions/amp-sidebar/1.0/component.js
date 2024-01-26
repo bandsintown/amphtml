@@ -1,25 +1,9 @@
-/**
- * Copyright 2020 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import objstr from 'obj-str';
 
-import * as Preact from '../../../src/preact';
-import {ContainWrapper, useValueRef} from '../../../src/preact/component';
-import {Keys} from '../../../src/core/constants/key-codes';
-import {Side} from './sidebar-config';
-import {createPortal, forwardRef} from '../../../src/preact/compat';
-import {isRTL} from '../../../src/dom';
+import {Keys_Enum} from '#core/constants/key-codes';
+import {isRTL} from '#core/dom';
+
+import * as Preact from '#preact';
 import {
   useCallback,
   useEffect,
@@ -27,26 +11,29 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-} from '../../../src/preact';
-import {useSidebarAnimation} from './sidebar-animations-hook';
+} from '#preact';
+import {forwardRef} from '#preact/compat';
+import {ContainWrapper, useValueRef} from '#preact/component';
+
 import {useStyles} from './component.jss';
-import objstr from 'obj-str';
+import {useSidebarAnimation} from './sidebar-animations-hook';
+import {Side} from './sidebar-config';
 
 /**
- * @param {!SidebarDef.SidebarProps} props
- * @param {{current: (!SidebarDef.SidebarApi|null)}} ref
+ * @param {!BentoSidebarDef.Props} props
+ * @param {{current: (!BentoSidebarDef.Api|null)}} ref
  * @return {PreactDef.Renderable}
  */
-function SidebarWithRef(
+function BentoSidebarWithRef(
   {
     as: Comp = 'div',
-    side: sideProp,
-    onBeforeOpen,
-    onAfterOpen,
-    onAfterClose,
-    backdropStyle,
     backdropClassName,
+    backdropStyle,
     children,
+    onAfterClose,
+    onAfterOpen,
+    onBeforeOpen,
+    side: sideProp,
     ...rest
   },
   ref
@@ -74,16 +61,15 @@ function SidebarWithRef(
     setOpened(true);
   }, [onBeforeOpenRef]);
   const close = useCallback(() => setOpened(false), []);
-  const toggle = useCallback(() => (opened ? close() : open()), [
-    opened,
-    open,
-    close,
-  ]);
+  const toggle = useCallback(
+    () => (opened ? close() : open()),
+    [opened, open, close]
+  );
 
   useImperativeHandle(
     ref,
     () =>
-      /** @type {!SidebarDef.SidebarApi} */ ({
+      /** @type {!BentoSidebarDef.Api} */ ({
         open,
         close,
         toggle,
@@ -124,7 +110,7 @@ function SidebarWithRef(
       return;
     }
     const keydownCallback = (event) => {
-      if (event.key === Keys.ESCAPE) {
+      if (event.key === Keys_Enum.ESCAPE) {
         event.stopImmediatePropagation();
         event.preventDefault();
         close();
@@ -137,7 +123,13 @@ function SidebarWithRef(
   }, [opened, close]);
 
   return (
-    <div className={objstr({[classes.unmounted]: !mounted})} part="wrapper">
+    <div
+      class={objstr({
+        [classes.mounted]: mounted,
+        [classes.unmounted]: !mounted,
+      })}
+      part="wrapper"
+    >
       <ContainWrapper
         as={Comp}
         ref={sidebarRef}
@@ -163,72 +155,19 @@ function SidebarWithRef(
         onClick={() => close()}
         part="backdrop"
         style={backdropStyle}
-        className={objstr({
+        class={objstr({
           [classes.backdrop]: true,
           [classes.defaultBackdropStyles]: true,
           [backdropClassName]: backdropClassName,
         })}
         hidden={!side}
       >
-        <div className={classes.backdropOverscrollBlocker}></div>
+        <div class={classes.backdropOverscrollBlocker}></div>
       </div>
     </div>
   );
 }
 
-const Sidebar = forwardRef(SidebarWithRef);
-Sidebar.displayName = 'Sidebar'; // Make findable for tests.
-export {Sidebar};
-
-/**
- * @param {!SidebarDef.SidebarToolbarProps} props
- * @return {PreactDef.Renderable}
- */
-export function SidebarToolbar({
-  toolbar: mediaQueryProp,
-  toolbarTarget,
-  children,
-  ...rest
-}) {
-  const ref = useRef();
-  const [matches, setMatches] = useState(false);
-  const [targetEl, setTargetEl] = useState(null);
-
-  useEffect(() => {
-    const window = ref.current?.ownerDocument?.defaultView;
-    if (!window) {
-      return;
-    }
-
-    const mediaQueryList = window.matchMedia(mediaQueryProp);
-    const updateMatches = () => setMatches(mediaQueryList.matches);
-    mediaQueryList.addEventListener('change', updateMatches);
-    setMatches(mediaQueryList.matches);
-    return () => mediaQueryList.removeEventListener('change', updateMatches);
-  }, [mediaQueryProp]);
-
-  useEffect(() => {
-    const document = ref.current?.ownerDocument;
-    if (!document) {
-      return;
-    }
-
-    const selector = `#${CSS.escape(toolbarTarget)}`;
-    const newTargetEl = document.querySelector(selector);
-    setTargetEl(newTargetEl);
-  }, [toolbarTarget]);
-
-  return (
-    <>
-      <nav
-        ref={ref}
-        toolbar={mediaQueryProp}
-        toolbar-target={toolbarTarget}
-        {...rest}
-      >
-        {children}
-      </nav>
-      {matches && targetEl && createPortal(children, targetEl)}
-    </>
-  );
-}
+const BentoSidebar = forwardRef(BentoSidebarWithRef);
+BentoSidebar.displayName = 'BentoSidebar'; // Make findable for tests.
+export {BentoSidebar};

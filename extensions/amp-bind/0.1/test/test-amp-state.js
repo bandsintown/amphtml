@@ -1,23 +1,11 @@
-/**
- * Copyright 2017 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import '../amp-bind';
-import {ActionTrust} from '../../../../src/core/constants/action-constants';
-import {Services} from '../../../../src/services';
-import {UrlReplacementPolicy} from '../../../../src/batched-json';
+import {ActionTrust_Enum} from '#core/constants/action-constants';
+
+import {Services} from '#service';
+
+import {macroTask} from '#testing/helpers';
+
+import {UrlReplacementPolicy_Enum} from '../../../../src/batched-json';
 
 describes.realWin(
   'AmpState',
@@ -48,7 +36,7 @@ describes.realWin(
     }
 
     beforeEach(async () => {
-      ({win, ampdoc} = env);
+      ({ampdoc, win} = env);
 
       whenFirstVisiblePromise = new Promise((resolve, reject) => {
         whenFirstVisiblePromiseResolve = resolve;
@@ -91,12 +79,12 @@ describes.realWin(
       await whenFirstVisiblePromise;
 
       // await one macro-task to let viewer/fetch promise chains resolve.
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await macroTask();
 
       expect(ampState.fetch_).to.have.been.calledOnce;
       expect(ampState.fetch_).to.have.been.calledWithExactly(
         /* ampdoc */ env.sandbox.match.any,
-        UrlReplacementPolicy.ALL,
+        UrlReplacementPolicy_Enum.ALL,
         /* refresh */ env.sandbox.match.falsy
       );
 
@@ -121,13 +109,13 @@ describes.realWin(
       await whenFirstVisiblePromise;
 
       // await one macro-task to let viewer/fetch promise chains resolve.
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await macroTask();
 
       expect(actions.trigger).to.have.been.calledWithExactly(
         element,
         'fetch-error',
         /* event */ null,
-        ActionTrust.LOW
+        ActionTrust_Enum.LOW
       );
     });
 
@@ -160,7 +148,7 @@ describes.realWin(
       await whenFirstVisiblePromise;
 
       // await one macro-task to let viewer/fetch promise chains resolve.
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await macroTask();
 
       // One call from build(), one call from "refresh" action.
       expect(ampState.fetch_).to.have.been.calledTwice;
@@ -177,7 +165,7 @@ describes.realWin(
       );
 
       // await one macro-task to let viewer/fetch promise chains resolve.
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await macroTask();
 
       expect(ampState.fetch_).to.not.have.been.called;
     });
@@ -199,7 +187,7 @@ describes.realWin(
       await whenFirstVisiblePromise;
 
       // await a single macro-task to let promise chains resolve.
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await macroTask();
 
       expect(bind.setState).calledWithMatch(
         {myAmpState: {remote: 'data'}},
@@ -237,7 +225,7 @@ describes.realWin(
       await whenFirstVisiblePromise;
 
       // await a single macro-task to let promise chains resolve.
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await macroTask();
 
       expect(ampState.fetch_).to.have.been.called;
       expect(bind.setState).calledWithMatch(

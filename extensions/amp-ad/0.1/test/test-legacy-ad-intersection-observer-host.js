@@ -1,27 +1,13 @@
-/**
- * Copyright 2015 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {deserializeMessage} from '#core/3p-frame-messaging';
+import {layoutRectLtwh} from '#core/dom/layout/rect';
+
+import {getIntersectionChangeEntry} from '#utils/intersection-observer-3p-host';
 
 import {BaseElement} from '../../../../src/base-element';
-import {LegacyAdIntersectionObserverHost} from '../legacy-ad-intersection-observer-host';
 import {createAmpElementForTesting} from '../../../../src/custom-element';
-import {deserializeMessage} from '../../../../src/3p-frame-messaging';
-import {getIntersectionChangeEntry} from '../../../../src/utils/intersection-observer-3p-host';
-import {layoutRectLtwh} from '../../../../src/layout-rect';
+import {LegacyAdIntersectionObserverHost} from '../legacy-ad-intersection-observer-host';
 
-describes.sandboxed('IntersectionObserverHostForAd', {}, () => {
+describes.sandboxed('IntersectionObserverHostForAd', {}, (env) => {
   const ElementClass = createAmpElementForTesting(window, BaseElement);
   customElements.define('amp-int', ElementClass);
 
@@ -54,9 +40,9 @@ describes.sandboxed('IntersectionObserverHostForAd', {}, () => {
   }
 
   beforeEach(() => {
-    clock = window.sandbox.useFakeTimers();
-    onScrollSpy = window.sandbox.spy();
-    onChangeSpy = window.sandbox.spy();
+    clock = env.sandbox.useFakeTimers();
+    onScrollSpy = env.sandbox.spy();
+    onChangeSpy = env.sandbox.spy();
     testIframe = getIframe(iframeSrc);
     element = new ElementClass();
     element.win = window;
@@ -86,7 +72,7 @@ describes.sandboxed('IntersectionObserverHostForAd', {}, () => {
           fireObserved = true;
         },
         unobserve: () => (fireObserved = false),
-        disconnect: window.sandbox.spy(),
+        disconnect: env.sandbox.spy(),
       };
       return host.fireInOb_;
     };
@@ -104,7 +90,7 @@ describes.sandboxed('IntersectionObserverHostForAd', {}, () => {
       testIframe
     );
     insert(testIframe);
-    const postMessageSpy = window.sandbox /*OK*/
+    const postMessageSpy = env.sandbox /*OK*/
       .spy(testIframe.contentWindow, 'postMessage');
     ioInstance.fire();
     clock.tick(0);
@@ -188,7 +174,7 @@ describes.sandboxed('IntersectionObserverHostForAd', {}, () => {
   });
 
   it('should init listeners when element is in viewport', () => {
-    const sendElementIntersectionSpy = window.sandbox.spy(
+    const sendElementIntersectionSpy = env.sandbox.spy(
       LegacyAdIntersectionObserverHost.prototype,
       'sendElementIntersection_'
     );
@@ -206,7 +192,7 @@ describes.sandboxed('IntersectionObserverHostForAd', {}, () => {
   });
 
   it('should unlisten listeners when element is out of viewport', () => {
-    const sendElementIntersectionSpy = window.sandbox.spy(
+    const sendElementIntersectionSpy = env.sandbox.spy(
       LegacyAdIntersectionObserverHost.prototype,
       'sendElementIntersection_'
     );

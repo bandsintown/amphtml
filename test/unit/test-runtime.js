@@ -1,40 +1,26 @@
-/**
- * Copyright 2015 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import * as dom from '#core/dom';
+import {setShadowDomSupportedVersionForTesting} from '#core/dom/web-components';
+import {toArray} from '#core/types/array';
 
-import * as dom from '../../src/dom';
-import * as ext from '../../src/service/extensions-impl';
-import * as styles from '../../src/style-installer';
-import {AmpDocShadow, AmpDocSingle} from '../../src/service/ampdoc-impl';
-import {ElementStub} from '../../src/element-stub';
-import {Services} from '../../src/services';
-import {adopt, adoptShadowMode} from '../../src/runtime';
-import {createShadowRoot} from '../../src/shadow-embed';
+import {Services} from '#service';
+import {AmpDocShadow, AmpDocSingle} from '#service/ampdoc-impl';
+import {installAmpdocServices} from '#service/core-services';
+import * as ext from '#service/extensions-impl';
+import {installPlatformService} from '#service/platform-impl';
+import {installTemplatesServiceForDoc} from '#service/template-impl';
+import {installTimerService} from '#service/timer-impl';
+import {vsyncForTesting} from '#service/vsync-impl';
+
 import {deactivateChunking, runChunksForTesting} from '../../src/chunk';
+import {ElementStub} from '../../src/element-stub';
+import {adopt, adoptShadowMode} from '../../src/runtime';
 import {
   getServiceForDoc,
   getServicePromise,
   getServicePromiseOrNullForDoc,
-} from '../../src/service';
-import {installAmpdocServices} from '../../src/service/core-services';
-import {installPlatformService} from '../../src/service/platform-impl';
-import {installTemplatesServiceForDoc} from '../../src/service/template-impl';
-import {installTimerService} from '../../src/service/timer-impl';
-import {setShadowDomSupportedVersionForTesting} from '../../src/web-components';
-import {toArray} from '../../src/core/types/array';
-import {vsyncForTesting} from '../../src/service/vsync-impl';
+} from '../../src/service-helpers';
+import {createShadowRoot} from '../../src/shadow-embed';
+import * as styles from '../../src/style-installer';
 
 describes.fakeWin(
   'runtime',
@@ -1882,64 +1868,52 @@ describes.realWin(
           };
         }
 
-        it.configure()
-          .skipFirefox()
-          .run('should broadcast to all but sender', () => {
-            doc1.viewer.broadcast({test: 1});
-            return doc1.viewer
-              .sendMessageAwaitResponse('ignore', {})
-              .then(() => {
-                // Sender is not called.
-                expect(doc1.broadcastReceived).to.not.be.called;
+        it('should broadcast to all but sender', () => {
+          doc1.viewer.broadcast({test: 1});
+          return doc1.viewer.sendMessageAwaitResponse('ignore', {}).then(() => {
+            // Sender is not called.
+            expect(doc1.broadcastReceived).to.not.be.called;
 
-                // All others are called.
-                expect(doc2.broadcastReceived).to.be.calledOnce;
-                expect(doc2.broadcastReceived.args[0][0]).deep.equal({test: 1});
-                expect(doc3.broadcastReceived).to.be.calledOnce;
-                expect(doc3.broadcastReceived.args[0][0]).deep.equal({test: 1});
+            // All others are called.
+            expect(doc2.broadcastReceived).to.be.calledOnce;
+            expect(doc2.broadcastReceived.args[0][0]).deep.equal({test: 1});
+            expect(doc3.broadcastReceived).to.be.calledOnce;
+            expect(doc3.broadcastReceived.args[0][0]).deep.equal({test: 1});
 
-                // None of the onMessage are called.
-                expect(doc1.onMessage).to.not.be.called;
-                expect(doc2.onMessage).to.not.be.called;
-                expect(doc3.onMessage).to.not.be.called;
-              });
+            // None of the onMessage are called.
+            expect(doc1.onMessage).to.not.be.called;
+            expect(doc2.onMessage).to.not.be.called;
+            expect(doc3.onMessage).to.not.be.called;
           });
+        });
 
-        it.configure()
-          .skipFirefox()
-          .run('should stop broadcasting after close', () => {
-            doc3.amp.close();
-            doc1.viewer.broadcast({test: 1});
-            return doc1.viewer
-              .sendMessageAwaitResponse('ignore', {})
-              .then(() => {
-                // Sender is not called, closed is not called.
-                expect(doc1.broadcastReceived).to.not.be.called;
-                expect(doc3.broadcastReceived).to.not.be.called;
+        it('should stop broadcasting after close', () => {
+          doc3.amp.close();
+          doc1.viewer.broadcast({test: 1});
+          return doc1.viewer.sendMessageAwaitResponse('ignore', {}).then(() => {
+            // Sender is not called, closed is not called.
+            expect(doc1.broadcastReceived).to.not.be.called;
+            expect(doc3.broadcastReceived).to.not.be.called;
 
-                // All others are called.
-                expect(doc2.broadcastReceived).to.be.calledOnce;
-                expect(doc2.broadcastReceived.args[0][0]).deep.equal({test: 1});
-              });
+            // All others are called.
+            expect(doc2.broadcastReceived).to.be.calledOnce;
+            expect(doc2.broadcastReceived.args[0][0]).deep.equal({test: 1});
           });
+        });
 
-        it.configure()
-          .skipFirefox()
-          .run('should stop broadcasting after force-close', () => {
-            doc3.hostElement.parentNode.removeChild(doc3.hostElement);
-            doc1.viewer.broadcast({test: 1});
-            return doc1.viewer
-              .sendMessageAwaitResponse('ignore', {})
-              .then(() => {
-                // Sender is not called, closed is not called.
-                expect(doc1.broadcastReceived).to.not.be.called;
-                expect(doc3.broadcastReceived).to.not.be.called;
+        it('should stop broadcasting after force-close', () => {
+          doc3.hostElement.parentNode.removeChild(doc3.hostElement);
+          doc1.viewer.broadcast({test: 1});
+          return doc1.viewer.sendMessageAwaitResponse('ignore', {}).then(() => {
+            // Sender is not called, closed is not called.
+            expect(doc1.broadcastReceived).to.not.be.called;
+            expect(doc3.broadcastReceived).to.not.be.called;
 
-                // All others are called.
-                expect(doc2.broadcastReceived).to.be.calledOnce;
-                expect(doc2.broadcastReceived.args[0][0]).deep.equal({test: 1});
-              });
+            // All others are called.
+            expect(doc2.broadcastReceived).to.be.calledOnce;
+            expect(doc2.broadcastReceived.args[0][0]).deep.equal({test: 1});
           });
+        });
 
         it('should send message', () => {
           doc1.onMessage.returns(Promise.resolve());

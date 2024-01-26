@@ -7,22 +7,6 @@ teaser:
   text: Provides an approximate country-level geolocation interface.
 ---
 
-<!---
-Copyright 2018 The AMP HTML Authors. All Rights Reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS-IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
--->
-
 # amp-geo
 
 ## Usage
@@ -183,6 +167,85 @@ example below.
 </amp-geo>
 ```
 
+#### U.S. Subdivisions Detection
+
+The `amp-geo` component provides the
+[ISO 3166-2](https://en.wikipedia.org/wiki/ISO_3166-2) information when it
+determines a request is from US State or from the District of Columbia
+(Washington DC). The values are in a `${country}-${subdivision}` format and
+the following codes are supported.
+
+  - `us-al` - Alabama
+  - `us-ak` - Alaska
+  - `us-az` - Arizona
+  - `us-ar` - Arkansas
+  - `us-ca` - California
+  - `us-co` - Colorado
+  - `us-ct` - Connecticut
+  - `us-de` - Delaware
+  - `us-dc` - District of Columbia
+  - `us-fl` - Florida
+  - `us-ga` - Georgia
+  - `us-hi` - Hawaii
+  - `us-id` - Idaho
+  - `us-il` - Illinois
+  - `us-in` - Indiana
+  - `us-ia` - Iowa
+  - `us-ks` - Kansas
+  - `us-ky` - Kentucky
+  - `us-la` - Louisiana
+  - `us-me` - Maine
+  - `us-md` - Maryland
+  - `us-ma` - Massachusetts
+  - `us-mi` - Michigan
+  - `us-mn` - Minnesota
+  - `us-ms` - Mississippi
+  - `us-mo` - Missouri
+  - `us-mt` - Montana
+  - `us-ne` - Nebraska
+  - `us-nv` - Nevada
+  - `us-nh` - New Hampshire
+  - `us-nj` - New Jersey
+  - `us-nm` - New Mexico
+  - `us-ny` - New York
+  - `us-nc` - North Carolina
+  - `us-nd` - North Dakota
+  - `us-oh` - Ohio
+  - `us-ok` - Oklahoma
+  - `us-or` - Oregon
+  - `us-pa` - Pennsylvania
+  - `us-ri` - Rhode Island
+  - `us-sc` - South Carolina
+  - `us-sd` - South Dakota
+  - `us-tn` - Tennessee
+  - `us-tx` - Texas
+  - `us-ut` - Utah
+  - `us-vt` - Vermont
+  - `us-va` - Virginia
+  - `us-wa` - Washington
+  - `us-wv` - West Virginia
+  - `us-wi` - Wisconsin
+  - `us-wy` - Wyoming
+
+Additional countries/subdivision may be included with the preset list as in the `usWithSubdivisions`
+example below.
+
+```html
+<amp-geo layout="nodisplay">
+  <script type="application/json">
+    {
+      "ISOCountryGroups": {
+        "usca": ["preset-us-ca"],
+        "usco":["us-co"],
+        "usct":["us-ct"],
+        "usva":["us-va"],
+        "usWithSubdivisions": ["us-ca", "us-co", "us-ct", "us-va"]
+      }
+    }
+  </script>
+</amp-geo>
+```
+
 ### Render Blocking
 
 By default, the `amp-geo` component is not render blocking. That is, the page
@@ -261,6 +324,12 @@ The country code is also available via AMP variable substitution:
 `AMP_GEO(ISOCountry)` or `${ampGeo(ISOCountry)}` returns the country code (or
 `unknown`).
 
+The subdivision code is also available via AMP variable substitution:
+
+`AMP_GEO` or `${ampGeo}` returns the list of matched groups (comma delimited).
+`AMP_GEO(ISOSubdivision)` or `${ampGeo(ISOSubdivision)}` returns the country
+subdivision (or `unknown`).
+
 ### Caching
 
 The `amp-geo` JavaScript file is served with a 30-minute cache lifetime
@@ -286,8 +355,8 @@ document is served directly from their origin while retaining dynamic
 configuration when served from a cache.
 
 Caches that wish to pre-render `amp-geo` should
-[open an issue](https://github.com/ampproject/amphtml/issues/new) requesting to
-be removed from the pre-render override.
+[open an issue](https://github.com/ampproject/amphtml/issues/new/choose)
+requesting to be removed from the pre-render override.
 
 ### Self Hosting
 
@@ -315,7 +384,7 @@ security reasons, to prevent sharing of geo-spoofing urls, this feature is only
 available to users who have enabled the
 [Experimental Channel](https://amp.dev/documentation/guides-and-tutorials/learn/experimental)
 or who are testing locally (i.e., `amp-geo.js` is served in development mode via
-[`amp serve`](https://github.com/ampproject/amphtml/blob/main/contributing/DEVELOPING.md)).
+[`amp serve`](https://github.com/ampproject/amphtml/blob/main/docs/developing.md)).
 
 [tip type="note"]
 

@@ -1,30 +1,18 @@
-/**
- * Copyright 2020 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import '../amp-story-360';
+import {createElementWithAttributes} from '#core/dom';
+
+import {LocalizationService} from '#service/localization';
+
+import {macroTask} from '#testing/helpers';
+
+import {
+  registerServiceBuilder,
+  registerServiceBuilderForDoc,
+} from '../../../../src/service-helpers';
 import {
   Action,
   AmpStoryStoreService,
 } from '../../../amp-story/1.0/amp-story-store-service';
-import {LocalizationService} from '../../../../src/service/localization';
-import {createElementWithAttributes} from '../../../../src/dom';
-import {
-  registerServiceBuilder,
-  registerServiceBuilderForDoc,
-} from '../../../../src/service';
 
 describes.realWin(
   'amp-story-360',
@@ -40,8 +28,6 @@ describes.realWin(
     let threesixty;
     let storeService;
     let pageEl;
-
-    const nextTick = () => new Promise((resolve) => win.setTimeout(resolve, 0));
 
     function appendAmpImg(parent, path) {
       const ampImg = createElementWithAttributes(win.document, 'amp-img', {
@@ -115,7 +101,7 @@ describes.realWin(
         '.i-amphtml-story-360-activate-button'
       );
 
-      await nextTick();
+      await macroTask();
 
       expect(activationEl.getAttribute('role')).to.eql('button');
     });

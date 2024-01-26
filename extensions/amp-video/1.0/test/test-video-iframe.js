@@ -1,23 +1,9 @@
-/**
- * Copyright 2020 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-import * as Preact from '../../../../src/preact';
-import {VideoIframe} from '../video-iframe';
-import {createRef} from '../../../../src/preact';
 import {mount} from 'enzyme';
+
+import {VideoIframeInternal} from '#bento/components/bento-video/1.0/video-iframe';
+
+import * as Preact from '#preact';
+import {createRef} from '#preact';
 
 function dispatchMessage(window, opt_event) {
   const event = window.document.createEvent('Event');
@@ -25,7 +11,7 @@ function dispatchMessage(window, opt_event) {
   window.dispatchEvent(Object.assign(event, opt_event));
 }
 
-describes.realWin('VideoIframe Preact component', {}, (env) => {
+describes.realWin('VideoIframeInternal Preact component', {}, (env) => {
   let window;
   let document;
 
@@ -39,7 +25,7 @@ describes.realWin('VideoIframe Preact component', {}, (env) => {
     const onCanPlay = env.sandbox.spy();
     const makeMethodMessage = env.sandbox.spy();
     const videoIframe = mount(
-      <VideoIframe
+      <VideoIframeInternal
         src="about:blank"
         makeMethodMessage={makeMethodMessage}
         onIframeLoad={onIframeLoad}
@@ -57,7 +43,10 @@ describes.realWin('VideoIframe Preact component', {}, (env) => {
   it('unmutes per lack of `muted` prop', async () => {
     const makeMethodMessage = env.sandbox.spy();
     const videoIframe = mount(
-      <VideoIframe src="about:blank" makeMethodMessage={makeMethodMessage} />,
+      <VideoIframeInternal
+        src="about:blank"
+        makeMethodMessage={makeMethodMessage}
+      />,
       {attachTo: document.body}
     );
 
@@ -69,7 +58,7 @@ describes.realWin('VideoIframe Preact component', {}, (env) => {
   it('mutes per `muted` prop', async () => {
     const makeMethodMessage = env.sandbox.spy();
     const videoIframe = mount(
-      <VideoIframe
+      <VideoIframeInternal
         src="about:blank"
         makeMethodMessage={makeMethodMessage}
         muted
@@ -85,7 +74,10 @@ describes.realWin('VideoIframe Preact component', {}, (env) => {
   it('hides controls per lack of `controls` prop', async () => {
     const makeMethodMessage = env.sandbox.spy();
     const videoIframe = mount(
-      <VideoIframe src="about:blank" makeMethodMessage={makeMethodMessage} />,
+      <VideoIframeInternal
+        src="about:blank"
+        makeMethodMessage={makeMethodMessage}
+      />,
       {attachTo: document.body}
     );
 
@@ -97,7 +89,7 @@ describes.realWin('VideoIframe Preact component', {}, (env) => {
   it('shows controls per `controls` prop', async () => {
     const makeMethodMessage = env.sandbox.spy();
     const videoIframe = mount(
-      <VideoIframe
+      <VideoIframeInternal
         src="about:blank"
         makeMethodMessage={makeMethodMessage}
         controls
@@ -113,7 +105,7 @@ describes.realWin('VideoIframe Preact component', {}, (env) => {
   it('passes messages to onMessage', async () => {
     const onMessage = env.sandbox.spy();
     const videoIframe = mount(
-      <VideoIframe src="about:blank" onMessage={onMessage} controls />,
+      <VideoIframeInternal src="about:blank" onMessage={onMessage} controls />,
       {attachTo: document.body}
     );
 
@@ -135,9 +127,12 @@ describes.realWin('VideoIframe Preact component', {}, (env) => {
 
   it("ignores messages if source doesn't match iframe", async () => {
     const onMessage = env.sandbox.spy();
-    mount(<VideoIframe src="about:blank" onMessage={onMessage} controls />, {
-      attachTo: document.body,
-    });
+    mount(
+      <VideoIframeInternal src="about:blank" onMessage={onMessage} controls />,
+      {
+        attachTo: document.body,
+      }
+    );
     dispatchMessage(window, {source: null, data: 'whatever'});
     expect(onMessage).to.not.have.been.called;
   });
@@ -145,7 +140,7 @@ describes.realWin('VideoIframe Preact component', {}, (env) => {
   it('stops listening to messages on unmount', async () => {
     const onMessage = env.sandbox.spy();
     const videoIframe = mount(
-      <VideoIframe src="about:blank" onMessage={onMessage} />,
+      <VideoIframeInternal src="about:blank" onMessage={onMessage} />,
       {attachTo: document.body}
     );
     const iframe = videoIframe.getDOMNode();
@@ -159,7 +154,7 @@ describes.realWin('VideoIframe Preact component', {}, (env) => {
     const removeEventListener = env.sandbox.stub(window, 'removeEventListener');
 
     const videoIframe = mount(
-      <VideoIframe src="about:blank" onMessage={() => {}} />,
+      <VideoIframeInternal src="about:blank" onMessage={() => {}} />,
       {attachTo: document.body}
     );
 
@@ -184,7 +179,7 @@ describes.realWin('VideoIframe Preact component', {}, (env) => {
     const makeMethodMessageStub = env.sandbox.stub();
 
     const videoIframe = mount(
-      <VideoIframe
+      <VideoIframeInternal
         ref={ref}
         src="about:blank"
         makeMethodMessage={makeMethodMessageStub}
@@ -218,7 +213,7 @@ describes.realWin('VideoIframe Preact component', {}, (env) => {
 
       // no value.
       mount(
-        <VideoIframe
+        <VideoIframeInternal
           ref={ref}
           src="about:blank"
           makeMethodMessage={makeMethodMessage}
@@ -230,7 +225,7 @@ describes.realWin('VideoIframe Preact component', {}, (env) => {
       // null value.
       const playerStateRef = createRef();
       mount(
-        <VideoIframe
+        <VideoIframeInternal
           ref={ref}
           src="about:blank"
           makeMethodMessage={makeMethodMessage}
@@ -243,7 +238,7 @@ describes.realWin('VideoIframe Preact component', {}, (env) => {
       // empty value.
       playerStateRef.current = {};
       mount(
-        <VideoIframe
+        <VideoIframeInternal
           ref={ref}
           src="about:blank"
           makeMethodMessage={makeMethodMessage}
@@ -259,7 +254,7 @@ describes.realWin('VideoIframe Preact component', {}, (env) => {
       const playerStateRef = createRef();
       playerStateRef.current = {duration: 111, currentTime: 11};
       mount(
-        <VideoIframe
+        <VideoIframeInternal
           ref={ref}
           src="about:blank"
           makeMethodMessage={makeMethodMessage}
@@ -276,7 +271,7 @@ describes.realWin('VideoIframe Preact component', {}, (env) => {
     });
   });
 
-  describe('uses makeMethodMessage to posts imperative handle methods', () => {
+  describe('uses makeMethodMessage to post imperative handle methods', () => {
     ['play', 'pause'].forEach((method) => {
       it(`with \`${method}\``, async () => {
         let videoIframeRef;
@@ -286,7 +281,7 @@ describes.realWin('VideoIframe Preact component', {}, (env) => {
         const makeMethodMessageSpy = env.sandbox.spy(makeMethodMessage);
 
         const videoIframe = mount(
-          <VideoIframe
+          <VideoIframeInternal
             ref={(ref) => (videoIframeRef = ref)}
             src="about:blank"
             makeMethodMessage={makeMethodMessageSpy}

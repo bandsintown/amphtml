@@ -1,23 +1,9 @@
-/**
- * Copyright 2015 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import '../amp-brid-player';
-import {Services} from '../../../../src/services';
-import {VideoEvents} from '../../../../src/video-interface';
-import {listenOncePromise} from '../../../../src/event-helper';
+import {Services} from '#service';
+
+import {listenOncePromise} from '#utils/event-helper';
+
+import {VideoEvents_Enum} from '../../../../src/video-interface';
 
 describes.realWin(
   'amp-brid-player',
@@ -36,7 +22,7 @@ describes.realWin(
       timer = Services.timerFor(win);
     });
 
-    function getBridPlayer(attributes, opt_responsive) {
+    function getBridPlayer(attributes, opt_responsive, config) {
       const bc = doc.createElement('amp-brid-player');
 
       for (const key in attributes) {
@@ -46,6 +32,18 @@ describes.realWin(
       bc.setAttribute('height', '360');
       if (opt_responsive) {
         bc.setAttribute('layout', 'responsive');
+      }
+
+      // create config element if provided
+      if (config) {
+        const configElement = doc.createElement('script');
+        configElement.setAttribute('type', 'application/json');
+        if (typeof config == 'string') {
+          configElement.textContent = config;
+        } else {
+          configElement.textContent = JSON.stringify(config);
+        }
+        bc.appendChild(configElement);
       }
 
       // see yt test implementation
@@ -166,6 +164,27 @@ describes.realWin(
       });
     });
 
+    it('config is passed', () => {
+      return getBridPlayer(
+        {
+          'data-partner': '264',
+          'data-player': '4144',
+          'data-video': '13663',
+        },
+        null,
+        {
+          'debug': 1,
+        }
+      ).then((bc) => {
+        const iframe = bc.querySelector('iframe');
+        expect(iframe).to.not.be.null;
+        expect(iframe.tagName).to.equal('IFRAME');
+        expect(iframe.src).to.equal(
+          'https://services.brid.tv/services/iframe/video/13663/264/4144/0/1/?amp=1&cust_config={%22debug%22:1}'
+        );
+      });
+    });
+
     it('should forward events from brid-player to the amp element', async () => {
       const bc = await getBridPlayer(
         {
@@ -180,22 +199,22 @@ describes.realWin(
       const iframe = bc.querySelector('iframe');
       return Promise.resolve()
         .then(() => {
-          const p = listenOncePromise(bc, VideoEvents.PLAYING);
+          const p = listenOncePromise(bc, VideoEvents_Enum.PLAYING);
           sendFakeMessage(impl, iframe, 'trigger|play');
           return p;
         })
         .then(() => {
-          const p = listenOncePromise(bc, VideoEvents.MUTED);
+          const p = listenOncePromise(bc, VideoEvents_Enum.MUTED);
           sendFakeMessage(impl, iframe, 'volume|0');
           return p;
         })
         .then(() => {
-          const p = listenOncePromise(bc, VideoEvents.PAUSE);
+          const p = listenOncePromise(bc, VideoEvents_Enum.PAUSE);
           sendFakeMessage(impl, iframe, 'trigger|pause');
           return p;
         })
         .then(() => {
-          const p = listenOncePromise(bc, VideoEvents.UNMUTED);
+          const p = listenOncePromise(bc, VideoEvents_Enum.UNMUTED);
           sendFakeMessage(impl, iframe, 'volume|1');
           return p;
         });
@@ -216,13 +235,13 @@ describes.realWin(
           'data-player': '979',
           'data-video': '13663',
         }).then((brid) => {
-          const img = brid.querySelector('amp-img');
+          const img = brid.querySelector('img');
           expect(img).to.not.be.null;
           expect(img.getAttribute('src')).to.equal(
             'https://cdn.brid.tv/live/partners/264/snapshot/13663.jpg'
           );
-          expect(img.getAttribute('layout')).to.equal('fill');
-          expect(img.hasAttribute('placeholder')).to.be.true;
+          expect(img).to.have.class('i-amphtml-fill-content');
+          expect(img).to.have.attribute('placeholder');
           expect(img.getAttribute('alt')).to.equal('Loading video');
           expect(img.getAttribute('referrerpolicy')).to.equal('origin');
         });
@@ -234,28 +253,11 @@ describes.realWin(
           'data-video': '13663',
           'aria-label': 'great video',
         }).then((brid) => {
-          const img = brid.querySelector('amp-img');
+          const img = brid.querySelector('img');
           expect(img).to.not.be.null;
           expect(img.getAttribute('alt')).to.equal(
             'Loading video - great video'
           );
-        });
-      });
-      it('should create a fallback for default snapshot', () => {
-        return getBridPlayer({
-          'data-partner': '264',
-          'data-player': '979',
-          'data-video': '13663',
-        }).then((brid) => {
-          const img = brid.querySelector('amp-img');
-          const fallbackImg = img.querySelector('amp-img');
-          expect(fallbackImg).to.not.be.null;
-          expect(fallbackImg.getAttribute('src')).to.equal(
-            'https://cdn.brid.tv/live/default/defaultSnapshot.png'
-          );
-          expect(fallbackImg.getAttribute('layout')).to.equal('fill');
-          expect(fallbackImg.hasAttribute('fallback')).to.be.true;
-          expect(fallbackImg.getAttribute('referrerpolicy')).to.equal('origin');
         });
       });
     });

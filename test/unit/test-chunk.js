@@ -1,20 +1,6 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {Services} from '#service';
+import {installDocService} from '#service/ampdoc-impl';
 
-import {Services} from '../../src/services';
 import {
   activateChunkingForTesting,
   chunkInstanceForTesting,
@@ -22,9 +8,8 @@ import {
   onIdle,
   startupChunk,
 } from '../../src/chunk';
-import {installDocService} from '../../src/service/ampdoc-impl';
 
-describe('chunk2', () => {
+describes.sandboxed('chunk2', {}, () => {
   beforeEach(() => {
     activateChunkingForTesting();
   });
@@ -176,40 +161,37 @@ describe('chunk2', () => {
         basicTests(env);
       });
 
-      describe
-        .configure()
-        .skip(() => !('onunhandledrejection' in window))
-        .run('error handling', () => {
-          let fakeWin;
-          let done;
+      describe('error handling', () => {
+        let fakeWin;
+        let done;
 
-          function onReject(event) {
-            expect(event.reason.message).to.match(/test async/);
-            done();
-          }
+        function onReject(event) {
+          expect(event.reason.message).to.match(/test async/);
+          done();
+        }
 
-          beforeEach(() => {
-            fakeWin = env.win;
-            const {ampdoc} = env;
-            env.sandbox.stub(ampdoc, 'isVisible').callsFake(() => {
-              return true;
-            });
-            window.addEventListener('unhandledrejection', onReject);
+        beforeEach(() => {
+          fakeWin = env.win;
+          const {ampdoc} = env;
+          env.sandbox.stub(ampdoc, 'isVisible').callsFake(() => {
+            return true;
           });
+          window.addEventListener('unhandledrejection', onReject);
+        });
 
-          afterEach(() => {
-            window.removeEventListener('unhandledrejection', onReject);
+        afterEach(() => {
+          window.removeEventListener('unhandledrejection', onReject);
+        });
+
+        it('should proceed on error and rethrowAsync', (d) => {
+          startupChunk(fakeWin.document, () => {
+            throw new Error('test async');
           });
-
-          it('should proceed on error and rethrowAsync', (d) => {
-            startupChunk(fakeWin.document, () => {
-              throw new Error('test async');
-            });
-            startupChunk(fakeWin.document, () => {
-              done = d;
-            });
+          startupChunk(fakeWin.document, () => {
+            done = d;
           });
         });
+      });
 
       describe('invisible', () => {
         beforeEach(() => {
@@ -217,9 +199,8 @@ describe('chunk2', () => {
           env.sandbox.stub(ampdoc, 'isVisible').callsFake(() => {
             return false;
           });
-          env.win.requestIdleCallback = resolvingIdleCallbackWithTimeRemaining(
-            15
-          );
+          env.win.requestIdleCallback =
+            resolvingIdleCallbackWithTimeRemaining(15);
           const chunks = chunkInstanceForTesting(env.win.document);
           env.sandbox.stub(chunks, 'executeAsap_').callsFake(() => {
             throw new Error('No calls expected: executeAsap_');
@@ -252,9 +233,8 @@ describe('chunk2', () => {
           env.sandbox.stub(ampdoc, 'isVisible').callsFake(() => {
             return false;
           });
-          env.win.requestIdleCallback = resolvingIdleCallbackWithTimeRemaining(
-            15
-          );
+          env.win.requestIdleCallback =
+            resolvingIdleCallbackWithTimeRemaining(15);
           const chunks = chunkInstanceForTesting(env.win.document);
           env.sandbox.stub(chunks, 'executeAsap_').callsFake(() => {
             throw new Error('No calls expected: executeAsap_');
@@ -360,7 +340,7 @@ describe('chunk2', () => {
   );
 });
 
-describe('long tasks', () => {
+describes.sandboxed('long tasks', {}, () => {
   describes.fakeWin(
     'long chunk tasks force a macro task between work',
     {
@@ -453,36 +433,32 @@ describe('long tasks', () => {
         });
       });
 
-      // Skipping Firefox due to issues with the promise ordering in
-      // the async-await polyfill that this test relies on.
-      it.configure()
-        .skipFirefox()
-        .run('should not issue a macro task after having been idle', (done) => {
-          (async function () {
-            startupChunk(
-              env.win.document,
-              complete('1', false),
-              /* make body visible */ true
-            );
-            // Unwind the promise queue so that subsequent invocations
-            // are scheduled into an empty task queue.
-            for (let i = 0; i < 100; i++) {
-              await Promise.resolve();
-            }
-            expect(progress).to.equal('1');
-            complete('2', true)();
-            startupChunk(env.win.document, () => {
-              expect(postMessageCalls).to.equal(0);
-              expect(progress).to.equal('12');
-              done();
-            });
-          })();
-        });
+      it('should not issue a macro task after having been idle', (done) => {
+        (async function () {
+          startupChunk(
+            env.win.document,
+            complete('1', false),
+            /* make body visible */ true
+          );
+          // Unwind the promise queue so that subsequent invocations
+          // are scheduled into an empty task queue.
+          for (let i = 0; i < 100; i++) {
+            await Promise.resolve();
+          }
+          expect(progress).to.equal('1');
+          complete('2', true)();
+          startupChunk(env.win.document, () => {
+            expect(postMessageCalls).to.equal(0);
+            expect(progress).to.equal('12');
+            done();
+          });
+        })();
+      });
     }
   );
 });
 
-describe('isInputPending usage', () => {
+describes.sandboxed('isInputPending usage', {}, () => {
   describes.fakeWin(
     'pending input breaks microtask loop to subsequent macrotask',
     {
@@ -589,14 +565,14 @@ describe('isInputPending usage', () => {
   );
 });
 
-describe('onIdle', () => {
+describes.sandboxed('onIdle', {}, (env) => {
   let win;
   let calls;
   let callbackCalled;
   let clock;
 
   beforeEach(() => {
-    clock = window.sandbox.useFakeTimers();
+    clock = env.sandbox.useFakeTimers();
     calls = [];
     callbackCalled = false;
     win = {

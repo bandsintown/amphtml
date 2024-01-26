@@ -1,31 +1,21 @@
-/**
- * Copyright 2015 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import * as fakeTimers from '@sinonjs/fake-timers';
-import {AmpScriptService} from '../../../../extensions/amp-script/0.1/amp-script';
+
+import {Services} from '#service';
+import {installDocService} from '#service/ampdoc-impl';
+import {installTimerService} from '#service/timer-impl';
+
+import {loadPromise} from '#utils/event-helper';
+
 import {
   ImagePixelVerifier,
   mockWindowInterface,
-} from '../../../../testing/test-helper';
-import {Services} from '../../../../src/services';
-import {Transport} from '../transport';
+} from '#testing/helpers/service';
+
+import * as privacySandboxUtils from 'src/utils/privacy-sandbox-utils';
+
 import {getMode} from '../../../../src/mode';
-import {installDocService} from '../../../../src/service/ampdoc-impl';
-import {installTimerService} from '../../../../src/service/timer-impl';
-import {loadPromise} from '../../../../src/event-helper';
+import {AmpScriptService} from '../../../amp-script/0.1/amp-script';
+import {Transport} from '../transport';
 
 describes.realWin(
   'amp-analytics.transport',
@@ -49,6 +39,8 @@ describes.realWin(
       openXhrStub = env.sandbox.stub();
       sendXhrStub = env.sandbox.stub();
       sendBeaconStub = env.sandbox.stub();
+
+      env.sandbox.spy(Services, 'urlReplacementsForDoc');
 
       // Needed for PreconnectService.
       installDocService(win, true);
@@ -111,6 +103,44 @@ describes.realWin(
       expectNoBeacon();
       expectNoXhr();
       expectImagePixel('https://example.test/test', 'no-referrer');
+    });
+
+    it('carries attributionSrc over to image pixel', () => {
+      setupStubs(true, true);
+      env.sandbox
+        .stub(privacySandboxUtils, 'isAttributionReportingAllowed')
+        .returns(true);
+      sendRequest(win, 'https://example.test/test', {
+        beacon: true,
+        xhrpost: true,
+        image: true,
+        referrerPolicy: 'no-referrer',
+        attributionsrc: 'https://example.test/attributionsrc',
+      });
+      expectNoBeacon();
+      expectNoXhr();
+      expectImagePixel(
+        'https://example.test/test',
+        'no-referrer',
+        'https://example.test/attributionsrc'
+      );
+    });
+
+    it('carries empty attributionSrc over to image pixel', () => {
+      setupStubs(true, true);
+      env.sandbox
+        .stub(privacySandboxUtils, 'isAttributionReportingAllowed')
+        .returns(true);
+      sendRequest(win, 'https://example.test/test', {
+        beacon: true,
+        xhrpost: true,
+        image: true,
+        referrerPolicy: 'no-referrer',
+        attributionsrc: '',
+      });
+      expectNoBeacon();
+      expectNoXhr();
+      expectImagePixel('https://example.test/test', 'no-referrer', '');
     });
 
     it('falls back to xhrpost when enabled and beacon is not available', () => {
@@ -453,9 +483,8 @@ describes.realWin(
           '<amp-analytics type="bg"></amp-analytics>'
         );
         frame.contentWindow.__AMP_TOP = win;
-        const ampAnalyticsEl = frame.contentWindow.document.querySelector(
-          'amp-analytics'
-        );
+        const ampAnalyticsEl =
+          frame.contentWindow.document.querySelector('amp-analytics');
 
         transport.maybeInitIframeTransport(ampAnalyticsEl);
         expect(transport.iframeTransport_).to.be.ok;
@@ -479,9 +508,8 @@ describes.realWin(
           '<amp-analytics type="bg"></amp-analytics>'
         );
         frame.contentWindow.__AMP_TOP = win;
-        const ampAnalyticsEl = frame.contentWindow.document.querySelector(
-          'amp-analytics'
-        );
+        const ampAnalyticsEl =
+          frame.contentWindow.document.querySelector('amp-analytics');
 
         transport.maybeInitIframeTransport(ampAnalyticsEl);
         expect(transport.iframeTransport_).to.be.ok;
@@ -550,8 +578,9 @@ describes.realWin(
       expect(sendXhrStub).to.not.be.called;
     }
 
-    function expectImagePixel(url, referrerPolicy) {
-      imagePixelVerifier.verifyRequest(url, referrerPolicy);
+    function expectImagePixel(url, referrerPolicy, attributionSrc) {
+      imagePixelVerifier.verifyRequest(url, referrerPolicy, attributionSrc);
+      expect(Services.urlReplacementsForDoc).to.be.calledWith(ampdoc);
     }
 
     function expectNoImagePixel() {

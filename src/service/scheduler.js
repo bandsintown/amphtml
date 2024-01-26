@@ -1,25 +1,18 @@
-/**
- * Copyright 2020 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {VisibilityState_Enum} from '#core/constants/visibility-state';
+import {
+  containsNotSelf,
+  hasNextNodeInDocumentOrder,
+  isIframed,
+} from '#core/dom';
+import {LayoutPriority_Enum} from '#core/dom/layout';
+import {removeItem} from '#core/types/array';
 
-import {LayoutPriority} from '../layout';
 import {READY_SCAN_SIGNAL} from './resources-interface';
-import {VisibilityState} from '../core/constants/visibility-state';
-import {containsNotSelf, hasNextNodeInDocumentOrder, isIframed} from '../dom';
-import {getServiceForDoc, registerServiceBuilderForDoc} from '../service';
-import {removeItem} from '../core/types/array';
+
+import {
+  getServiceForDoc,
+  registerServiceBuilderForDoc,
+} from '../service-helpers';
 
 const ID = 'scheduler';
 
@@ -191,9 +184,10 @@ export class Scheduler {
   docVisibilityChanged_() {
     const vs = this.ampdoc_.getVisibilityState();
     if (
-      vs == VisibilityState.VISIBLE ||
-      vs == VisibilityState.HIDDEN ||
-      vs == VisibilityState.PRERENDER
+      vs == VisibilityState_Enum.VISIBLE ||
+      vs == VisibilityState_Enum.HIDDEN ||
+      vs == VisibilityState_Enum.PRERENDER ||
+      vs == VisibilityState_Enum.PREVIEW
     ) {
       this.targets_.forEach((_, target) => this.maybeBuild_(target));
     }
@@ -244,7 +238,7 @@ export class Scheduler {
    */
   observed_(entries) {
     for (let i = 0; i < entries.length; i++) {
-      const {target, isIntersecting: isThisIntersecting} = entries[i];
+      const {isIntersecting: isThisIntersecting, target} = entries[i];
       const ampTarget = /** @type {!AmpElement} */ (target);
 
       const current = this.targets_.get(ampTarget);
@@ -277,11 +271,13 @@ export class Scheduler {
     const toBuild =
       parsed &&
       (asap || isIntersecting) &&
-      (vs == VisibilityState.VISIBLE ||
+      (vs == VisibilityState_Enum.VISIBLE ||
         // Hidden (hidden tab) allows full build.
-        vs == VisibilityState.HIDDEN ||
+        vs == VisibilityState_Enum.HIDDEN ||
         // Prerender can only proceed when allowed.
-        (vs == VisibilityState.PRERENDER && target.prerenderAllowed()));
+        (vs == VisibilityState_Enum.PRERENDER && target.prerenderAllowed()) ||
+        // Preview can only proceed when allowed.
+        (vs == VisibilityState_Enum.PREVIEW && target.previewAllowed()));
     if (!toBuild) {
       return;
     }
@@ -292,7 +288,7 @@ export class Scheduler {
     // elements are scheduled via the `requestIdleCallback`.
     const {win} = this.ampdoc_;
     const scheduler =
-      asap || target.getBuildPriority() <= LayoutPriority.CONTENT
+      asap || target.getBuildPriority() <= LayoutPriority_Enum.CONTENT
         ? win.setTimeout
         : win.requestIdleCallback || win.setTimeout;
     scheduler(() => target.mountInternal());

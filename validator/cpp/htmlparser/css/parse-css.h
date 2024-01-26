@@ -1,19 +1,3 @@
-//
-// Copyright 2019 The AMP HTML Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the license.
-//
-
 // A C++ port of third_party/parse_css/parse-css.js, the original
 // Javascript implementation came from https://github.com/tabatkins/parse-css.
 // This library aims to implement the CSS3 syntax module. Some of the original
@@ -34,8 +18,8 @@
 // hierarchy. However the parsing routines sometimes instantiate a
 // temporary TokenStream and put some AST nodes into there.
 
-#ifndef HTMLPARSER__CSS_PARSE_CSS_H_
-#define HTMLPARSER__CSS_PARSE_CSS_H_
+#ifndef CPP_HTMLPARSER_CSS_PARSE_CSS_H_
+#define CPP_HTMLPARSER_CSS_PARSE_CSS_H_
 
 #include <memory>
 #include <string>
@@ -45,8 +29,8 @@
 
 #include "absl/memory/memory.h"
 #include "absl/strings/strip.h"
-#include "css/parse-css.pb.h"
-#include "json/types.h"
+#include "cpp/htmlparser/css/parse-css.pb.h"
+#include "cpp/htmlparser/json/types.h"
 #include "validator.pb.h"
 
 namespace htmlparser::css {
@@ -499,7 +483,6 @@ class RuleVisitor;
 class Rule : public Token {
  public:
   explicit Rule(TokenType::Code type) : Token(type) {}
-  std::unique_ptr<Token> Clone() const final;
 
   // Accept will first dispatch to the appropriate
   // visitor->VisitRuleType method, then recurse into the children of
@@ -758,7 +741,7 @@ class Selector : public Token {
   virtual void Accept(SelectorVisitor* visitor) const = 0;
 };
 
-// This node models type selectors and universial selectors.
+// This node models type selectors and universal selectors.
 // http://www.w3.org/TR/css3-selectors/#type-selectors
 // http://www.w3.org/TR/css3-selectors/#universal-selector
 class TypeSelector : public Selector {
@@ -1027,4 +1010,4 @@ class SelectorVisitor : public RuleVisitor {
 };
 }  // namespace htmlparser::css
 
-#endif  // HTMLPARSER__CSS_PARSE_CSS_H_
+#endif  // CPP_HTMLPARSER_CSS_PARSE_CSS_H_

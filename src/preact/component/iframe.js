@@ -1,32 +1,17 @@
-/**
- * Copyright 2020 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {Loading_Enum} from '#core/constants/loading-instructions';
+import {ReadyState_Enum} from '#core/constants/ready-state';
 
-import * as Preact from '../../../src/preact';
-import {ContainWrapper, useValueRef} from '../../../src/preact/component';
-import {Loading} from '../../../src/core/loading-instructions';
-import {ReadyState} from '../../../src/core/constants/ready-state';
-import {forwardRef} from '../../../src/preact/compat';
-import {useAmpContext, useLoading} from '../../../src/preact/context';
+import * as Preact from '#preact';
 import {
   useCallback,
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
   useRef,
-} from '../../../src/preact';
+} from '#preact';
+import {forwardRef} from '#preact/compat';
+import {ContainWrapper, useValueRef} from '#preact/component';
+import {useAmpContext, useLoading} from '#preact/context';
 
 const DEFAULT_MATCHES_MESSAGING_ORIGIN = () => false;
 const ABOUT_BLANK = 'about:blank';
@@ -38,51 +23,55 @@ const ABOUT_BLANK = 'about:blank';
  * @param {string} src
  * @return {boolean}
  * */
-const canResetSrc = (src) => src && src != ABOUT_BLANK && !src.includes('#');
+const canResetSrc = (src) =>
+  !!(src && src != ABOUT_BLANK && !src.includes('#'));
 
 /**
- * @param {!IframeEmbedDef.Props} props
- * @param {{current: (!IframeEmbedDef.Api|null)}} ref
- * @return {PreactDef.Renderable}
+ * @param {import('./types').IframeEmbedProps} props
+ * @param {import('preact').RefObject<import('./types').IframeEmbedApi>} ref
+ * @return {import('preact').VNode}
  */
 export function IframeEmbedWithRef(
   {
     allow,
     allowFullScreen,
-    allowTransparency,
     iframeStyle,
-    name,
-    title,
+    loading: loadingProp,
     matchesMessagingOrigin = DEFAULT_MATCHES_MESSAGING_ORIGIN,
     messageHandler,
-    ready = true,
-    loading: loadingProp,
+    name,
     onReadyState,
+    ready = true,
     sandbox,
     src,
+    title,
     ...rest
   },
   ref
 ) {
   const {playable} = useAmpContext();
   const loading = useLoading(loadingProp);
-  const mount = loading !== Loading.UNLOAD;
+  const mount = loading !== Loading_Enum.UNLOAD;
 
   const loadedRef = useRef(false);
   // The `onReadyStateRef` is passed via a ref to avoid the changed values
   // of `onReadyState` re-triggering the side effects.
   const onReadyStateRef = useValueRef(onReadyState);
   const setLoaded = useCallback(
+    /** @param {boolean} value */
     (value) => {
       if (value !== loadedRef.current) {
         loadedRef.current = value;
         const onReadyState = onReadyStateRef.current;
-        onReadyState?.(value ? ReadyState.COMPLETE : ReadyState.LOADING);
+        onReadyState?.(
+          value ? ReadyState_Enum.COMPLETE : ReadyState_Enum.LOADING
+        );
       }
     },
     [onReadyStateRef]
   );
 
+  /** @type {import('preact/hooks').MutableRef<HTMLIFrameElement?>} */
   const iframeRef = useRef(null);
 
   // Component API: IframeEmbedDef.Api.
@@ -91,7 +80,12 @@ export function IframeEmbedWithRef(
     () => ({
       // Standard Bento
       get readyState() {
-        return loadedRef.current ? ReadyState.COMPLETE : ReadyState.LOADING;
+        return loadedRef.current
+          ? ReadyState_Enum.COMPLETE
+          : ReadyState_Enum.LOADING;
+      },
+      get node() {
+        return iframeRef.current;
       },
     }),
     []
@@ -119,7 +113,7 @@ export function IframeEmbedWithRef(
         iframe.src = iframe.src;
       } else {
         const parent = iframe.parentNode;
-        parent.insertBefore(iframe, iframe.nextSibling);
+        parent?.insertBefore(iframe, iframe.nextSibling);
       }
     }
   }, [playable]);
@@ -130,6 +124,7 @@ export function IframeEmbedWithRef(
       return;
     }
 
+    /** @param {MessageEvent} event */
     const handler = (event) => {
       const iframe = iframeRef.current;
       if (
@@ -143,8 +138,8 @@ export function IframeEmbedWithRef(
     };
 
     const {defaultView} = iframe.ownerDocument;
-    defaultView.addEventListener('message', handler);
-    return () => defaultView.removeEventListener('message', handler);
+    defaultView?.addEventListener('message', handler);
+    return () => defaultView?.removeEventListener('message', handler);
   }, [matchesMessagingOrigin, messageHandler, mount, ready]);
 
   return (
@@ -153,11 +148,14 @@ export function IframeEmbedWithRef(
         <iframe
           allow={allow}
           allowFullScreen={allowFullScreen}
-          allowTransparency={allowTransparency}
-          frameborder="0"
-          loading={loading}
+          // TODO: is it frameborder or frameBorder?
+          frameBorder="0"
+          // TODO: ensure loading is not "auto" or "unload".
+          loading={/** @type {*} */ (loading)}
           name={name}
           onLoad={() => setLoaded(true)}
+          // TODO: what should be here?
+          // @ts-ignore
           part="iframe"
           ref={iframeRef}
           sandbox={sandbox}
